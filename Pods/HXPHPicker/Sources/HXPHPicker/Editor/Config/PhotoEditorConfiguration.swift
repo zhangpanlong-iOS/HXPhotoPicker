@@ -35,7 +35,7 @@ open class PhotoEditorConfiguration: EditorConfiguration {
         )
         let crop = EditorToolOptions(
             imageName: "hx_editor_photo_crop",
-            type: .cropping
+            type: .cropSize
         )
         let mosaic = EditorToolOptions(
             imageName: "hx_editor_tools_mosaic",
@@ -48,48 +48,31 @@ open class PhotoEditorConfiguration: EditorConfiguration {
         return .init(toolOptions: [graffiti, chartlet, text, crop, mosaic, filter])
     }()
     
-    /// 画笔颜色数组
-    public lazy var brushColors: [String] = PhotoTools.defaultColors()
-    
-    /// 默认画笔颜色索引
-    public var defaultBrushColorIndex: Int = 2
-    
-    /// 画笔宽度
-    public var brushLineWidth: CGFloat = 5
+    /// 画笔
+    public lazy var brush: EditorBrushConfiguration = .init()
     
     /// 贴图
-    public lazy var chartlet: EditorChartletConfig = .init()
+    public lazy var chartlet: EditorChartletConfiguration = .init()
     
     /// 文本
-    public lazy var text: EditorTextConfig = .init()
+    public lazy var text: EditorTextConfiguration = .init()
     
     /// 裁剪配置
-    public lazy var cropping: PhotoCroppingConfiguration = .init()
+    public lazy var cropping: EditorCropSizeConfiguration = .init()
     
     /// 裁剪确认视图配置
     public lazy var cropConfimView: CropConfirmViewConfiguration = .init()
     
     /// 滤镜配置
-    public lazy var filter: FilterConfig = .init(infos: PhotoTools.defaultFilters())
-    
-    public struct FilterConfig {
-        /// 滤镜信息
-        public var infos: [PhotoEditorFilterInfo]
-        /// 滤镜选中颜色
-        public var selectedColor: UIColor
-        public init(
-            infos: [PhotoEditorFilterInfo] = [],
-            selectedColor: UIColor = .systemTintColor
-        ) {
-            self.infos = infos
-            self.selectedColor = selectedColor
-        }
-    }
+    public lazy var filter: Filter = .init(infos: PhotoTools.defaultFilters())
     
     /// 马赛克配置
-    public lazy var mosaic: MosaicConfig = .init()
+    public lazy var mosaic: Mosaic = .init()
+}
+
+extension PhotoEditorConfiguration {
     
-    public struct MosaicConfig {
+    public struct Mosaic {
         /// 生成马赛克的大小
         public var mosaicWidth: CGFloat = 20
         /// 涂鸦时马赛克的线宽

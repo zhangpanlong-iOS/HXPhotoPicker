@@ -34,14 +34,15 @@ struct PhotoEditData: Codable {
     let isPortrait: Bool
     let cropData: PhotoEditCropData?
     let brushData: [PhotoEditorBrushData]
-    let filter: PhotoEditorFilter?
-    let filterValue: Float
+    let hasFilter: Bool
+    let filterImageURL: URL?
     let mosaicData: [PhotoEditorMosaicData]
     let stickerData: EditorStickerData?
 }
 
 struct PhotoEditCropData: Codable {
     let cropSize: CGSize
+    let isRoundCrop: Bool
     let zoomScale: CGFloat
     let contentInset: UIEdgeInsets
     let offsetScale: CGPoint

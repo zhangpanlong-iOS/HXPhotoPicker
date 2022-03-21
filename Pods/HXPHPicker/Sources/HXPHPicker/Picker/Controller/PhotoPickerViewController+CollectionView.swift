@@ -6,34 +6,72 @@
 //
 
 import UIKit
+import Photos
+import PhotosUI
 
 // MARK: UICollectionViewDataSource
 extension PhotoPickerViewController: UICollectionViewDataSource {
     public func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        config.allowAddCamera &&
-            canAddCamera &&
-            pickerController != nil ? assets.count + 1 : assets.count
+        if pickerController == nil {
+            return assets.count
+        }
+        if canAddCamera && canAddLimit {
+            return assets.count + 2
+        }else if canAddCamera || canAddLimit {
+            return assets.count + 1
+        }else {
+            return assets.count
+        }
     }
-    
-    public func collectionView(
-        _ collectionView: UICollectionView,
-        cellForItemAt indexPath: IndexPath
-    ) -> UICollectionViewCell {
-        if config.allowAddCamera && canAddCamera {
+    func getAdditiveCell(_ indexPath: IndexPath) -> UICollectionViewCell? {
+        if canAddCamera && canAddLimit {
             if config.sort == .asc {
-                if indexPath.item == assets.count {
+                if indexPath.item == assets.count + 1 {
                     return cameraCell
+                }
+                if indexPath.item == assets.count {
+                    return limitAddCell
                 }
             }else {
                 if indexPath.item == 0 {
                     return cameraCell
                 }
+                if indexPath.item == 1 {
+                    return limitAddCell
+                }
             }
+        }else if canAddCamera || canAddLimit {
+            if config.sort == .asc {
+                if indexPath.item == assets.count {
+                    return canAddCamera ? cameraCell : limitAddCell
+                }
+            }else {
+                if indexPath.item == 0 {
+                    return canAddCamera ? cameraCell : limitAddCell
+                }
+            }
+        }
+        return nil
+    }
+    public func collectionView(
+        _ collectionView: UICollectionView,
+        cellForItemAt indexPath: IndexPath
+    ) -> UICollectionViewCell {
+        if let cell = getAdditiveCell(indexPath) {
+            return cell
         }
         let cell: PhotoPickerBaseViewCell
         let photoAsset = getPhotoAsset(for: indexPath.item)
-        if pickerController?.config.selectMode == .single ||
-            (photoAsset.mediaType == .video && videoLoadSingleCell) {
+        let isPickerCell: Bool
+        if let picker = pickerController,
+           picker.config.selectMode == .single {
+            isPickerCell = true
+        }else if photoAsset.mediaType == .video && videoLoadSingleCell {
+            isPickerCell = true
+        }else {
+            isPickerCell = false
+        }
+        if isPickerCell {
             cell = collectionView.dequeueReusableCell(
                 withReuseIdentifier:
                     NSStringFromClass(PhotoPickerViewCell.classForCoder()),
@@ -48,6 +86,7 @@ extension PhotoPickerViewController: UICollectionViewDataSource {
         }
         cell.delegate = self
         cell.config = config.cell
+        cell.isRequestDirectly = false
         cell.photoAsset = photoAsset
         return cell
     }
@@ -61,33 +100,37 @@ extension PhotoPickerViewController: UICollectionViewDelegate {
         willDisplay cell: UICollectionViewCell,
         forItemAt indexPath: IndexPath
     ) {
-        if let pickerController = pickerController,
-           let myCell = cell as? PhotoPickerBaseViewCell {
-            let photoAsset = getPhotoAsset(for: indexPath.item)
-            if !photoAsset.isSelected &&
-                config.cell.showDisableMask &&
-                pickerController.config.maximumSelectedVideoFileSize == 0 &&
-                pickerController.config.maximumSelectedPhotoFileSize == 0 {
-                myCell.canSelect = pickerController.canSelectAsset(
-                    for: photoAsset,
-                    showHUD: false
-                )
-            }else {
-                myCell.canSelect = true
-            }
-            myCell.updateSelectedState(
-                isSelected: photoAsset.isSelected,
-                animated: false
-            )
+        guard let pickerController = pickerController,
+              let myCell = cell as? PhotoPickerBaseViewCell else {
+            return
         }
+        myCell.request()
+        let photoAsset = getPhotoAsset(for: indexPath.item)
+        if !photoAsset.isSelected &&
+            config.cell.showDisableMask &&
+            pickerController.config.maximumSelectedVideoFileSize == 0 &&
+            pickerController.config.maximumSelectedPhotoFileSize == 0 {
+            myCell.canSelect = pickerController.canSelectAsset(
+                for: photoAsset,
+                showHUD: false
+            )
+        }else {
+            myCell.canSelect = true
+        }
+        myCell.updateSelectedState(
+            isSelected: photoAsset.isSelected,
+            animated: false
+        )
     }
     public func collectionView(
         _ collectionView: UICollectionView,
         didEndDisplaying cell: UICollectionViewCell,
         forItemAt indexPath: IndexPath
     ) {
-        let myCell = cell as? PhotoPickerBaseViewCell
-        myCell?.cancelRequest()
+        guard let myCell = cell as? PhotoPickerBaseViewCell else {
+            return
+        }
+        myCell.cancelReload()
     }
     public func collectionView(
         _ collectionView: UICollectionView,
@@ -126,23 +169,41 @@ extension PhotoPickerViewController: UICollectionViewDelegate {
                     PhotoTools.showNotCameraAuthorizedAlert(viewController: self)
                 }
             }
-        }else if cell is PhotoPickerBaseViewCell {
-            let myCell = cell as! PhotoPickerBaseViewCell
+            return
+        }
+        if cell is PhotoPickerLimitCell {
+            if #available(iOS 14, *) {
+                PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: self)
+            }
+            return
+        }
+        if let myCell = cell as? PhotoPickerBaseViewCell,
+           let photoAsset = myCell.photoAsset {
             if !myCell.canSelect {
                 return
             }
-            let item = needOffset ? indexPath.item - 1 : indexPath.item
-            let photoAsset = myCell.photoAsset!
-            if let pickerController = pickerController {
-                if !pickerController.shouldClickCell(photoAsset: myCell.photoAsset, index: item) {
-                    return
+            
+            if let pickerCell = myCell as? PhotoPickerViewCell,
+               pickerCell.inICloud {
+                photoAsset.syncICloud(
+                    hudAddedTo: navigationController?.view
+                ) { [weak self] photoAsset, _ in
+                    self?.resetICloud(for: photoAsset)
                 }
+                return
+            }
+            let item = needOffset ? indexPath.item - offsetIndex : indexPath.item
+            guard let picker = pickerController else {
+                return
+            }
+            if !picker.shouldClickCell(photoAsset: myCell.photoAsset, index: item) {
+                return
             }
             var selectionTapAction: SelectionTapAction
             if photoAsset.mediaType == .photo {
-                selectionTapAction = pickerController!.config.photoSelectionTapAction
+                selectionTapAction = picker.config.photoSelectionTapAction
             }else {
-                selectionTapAction = pickerController!.config.videoSelectionTapAction
+                selectionTapAction = picker.config.videoSelectionTapAction
             }
             switch selectionTapAction {
             case .preview:
@@ -156,11 +217,21 @@ extension PhotoPickerViewController: UICollectionViewDelegate {
             }
         }
     }
-    func quickSelect(_ photoAsset: PhotoAsset) {
+    func quickSelect(
+        _ photoAsset: PhotoAsset,
+        isCapture: Bool = false
+    ) {
+        guard let picker = pickerController else {
+            return
+        }
         if !photoAsset.isSelected {
             if !isMultipleSelect || (videoLoadSingleCell && photoAsset.mediaType == .video) {
-                if pickerController?.canSelectAsset(for: photoAsset, showHUD: true) == true {
-                    pickerController?.singleFinishCallback(for: photoAsset)
+                if picker.canSelectAsset(
+                    for: photoAsset,
+                    showHUD: true,
+                    filterEditor: isCapture
+                ) {
+                    picker.singleFinishCallback(for: photoAsset)
                 }
             }else {
                 if let cell = getCell(for: photoAsset) as? PhotoPickerViewCell {
@@ -213,6 +284,9 @@ extension PhotoPickerViewController: UICollectionViewDelegate {
                 config: config
             )
             photoEditorVC.delegate = self
+            if pickerController.config.editorCustomTransition {
+                navigationController?.delegate = photoEditorVC
+            }
             navigationController?.pushViewController(photoEditorVC, animated: animated)
             return true
         }
@@ -238,8 +312,8 @@ extension PhotoPickerViewController: UICollectionViewDelegate {
             let config: VideoEditorConfiguration
             if isExceedsTheLimit {
                 config = pickerController.config.videoEditor.mutableCopy() as! VideoEditorConfiguration
-                config.defaultState = .cropping
-                config.cropping.maximumVideoCroppingTime = TimeInterval(
+                config.defaultState = .cropTime
+                config.cropTime.maximumVideoCroppingTime = TimeInterval(
                     pickerController.config.maximumSelectedVideoDuration
                 )
                 config.mustBeTailored = true
@@ -256,6 +330,9 @@ extension PhotoPickerViewController: UICollectionViewDelegate {
             )
             videoEditorVC.coverImage = coverImage
             videoEditorVC.delegate = self
+            if pickerController.config.editorCustomTransition {
+                navigationController?.delegate = videoEditorVC
+            }
             navigationController?.pushViewController(videoEditorVC, animated: animated)
             return true
         }
@@ -296,6 +373,7 @@ extension PhotoPickerViewController: UICollectionViewDelegate {
                 width = max(120, width)
                 height = max(120, height)
                 let vc = PhotoPeekViewController(photoAsset)
+                vc.delegate = self
                 vc.preferredContentSize = CGSize(width: width, height: height)
                 return vc
             }else if sCell is PickerCamerViewCell &&
@@ -365,5 +443,127 @@ extension PhotoPickerViewController: UICollectionViewDelegate {
                 animated: false
             )
         }
+    }
+    
+    public func collectionView(
+        _ collectionView: UICollectionView,
+        viewForSupplementaryElementOfKind kind: String,
+        at indexPath: IndexPath
+    ) -> UICollectionReusableView {
+        if config.showAssetNumber &&
+            kind == UICollectionView.elementKindSectionFooter &&
+            (photoCount > 0 || videoCount > 0) {
+            let view = collectionView
+                .dequeueReusableSupplementaryView(
+                    ofKind: kind,
+                    withReuseIdentifier: NSStringFromClass(PhotoPickerBottomNumberView.classForCoder()),
+                    for: indexPath
+                ) as! PhotoPickerBottomNumberView
+            view.photoCount = photoCount
+            view.videoCount = videoCount
+            view.config = config.assetNumber
+            return view
+        }
+        return .init()
+    }
+    public func scrollViewDidScrollToTop(_ scrollView: UIScrollView) {
+        PhotoManager.shared.thumbnailLoadModeDidChange(.complete)
+        cellReloadImage()
+        scrollToTop = false
+    }
+    public func scrollViewShouldScrollToTop(_ scrollView: UIScrollView) -> Bool {
+        scrollToTop = true
+        scrollEndReload = true
+        PhotoManager.shared.thumbnailLoadModeDidChange(.simplify)
+        return true
+    }
+//    public func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+//        setCellLoadMode(.complete)
+//        print("BeginDragging complete")
+//    }
+    public func scrollViewDidEndDragging(
+        _ scrollView: UIScrollView,
+        willDecelerate decelerate: Bool
+    ) {
+        if !decelerate && !scrollToTop {
+            didChangeCellLoadMode = false
+            cellReloadImage()
+        }
+    }
+    public func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        if !scrollView.isTracking && !scrollToTop {
+            didChangeCellLoadMode = false
+            cellReloadImage()
+        }
+    }
+    public func scrollViewWillEndDragging(
+        _ scrollView: UIScrollView,
+        withVelocity velocity: CGPoint,
+        targetContentOffset: UnsafeMutablePointer<CGPoint>
+    ) {
+        let offset = targetContentOffset.pointee
+        let abs = abs(offset.y - scrollView.contentOffset.y)
+        if abs < 3000 {
+            if scrollReachDistance {
+                setCellLoadMode(.complete, false)
+                scrollReachDistance = false
+            }
+            return
+        }
+        targetOffsetY = offset.y
+        setCellLoadMode(.simplify)
+        scrollReachDistance = true
+    }
+    public func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        if didChangeCellLoadMode {
+            if abs(targetOffsetY - scrollView.contentOffset.y) < 1250 {
+                setCellLoadMode(.complete)
+            }
+        }
+    }
+    func setCellLoadMode(
+        _ mode: PhotoManager.ThumbnailLoadMode,
+        _ judgmentIsEqual: Bool = true
+    ) {
+        if PhotoManager.shared.thumbnailLoadMode == mode && judgmentIsEqual {
+            return
+        }
+        PhotoManager.shared.thumbnailLoadModeDidChange(mode)
+        scrollEndReload = mode == .complete
+        didChangeCellLoadMode = mode != .complete
+    }
+    func cellReloadImage() {
+        if !scrollEndReload && !didChangeCellLoadMode {
+            return
+        }
+        for baseCell in collectionView.visibleCells where baseCell is PhotoPickerBaseViewCell {
+            let cell = baseCell as! PhotoPickerBaseViewCell
+            cell.reload()
+        }
+        scrollEndReload = false
+    }
+}
+
+extension PhotoPickerViewController: UICollectionViewDelegateFlowLayout {
+    public func collectionView(
+        _ collectionView: UICollectionView,
+        layout collectionViewLayout: UICollectionViewLayout,
+        referenceSizeForFooterInSection section: Int
+    ) -> CGSize {
+        if config.showAssetNumber && (photoCount > 0 || videoCount > 0) {
+            return CGSize(width: view.width, height: 50)
+        }
+        return .zero
+    }
+}
+
+extension PhotoPickerViewController: PhotoPeekViewControllerDelegate {
+    public func photoPeekViewController(
+        requestSucceed photoPeekViewController: PhotoPeekViewController
+    ) {
+        guard let photoAsset = photoPeekViewController.photoAsset else {
+            return
+        }
+        resetICloud(for: photoAsset)
     }
 }

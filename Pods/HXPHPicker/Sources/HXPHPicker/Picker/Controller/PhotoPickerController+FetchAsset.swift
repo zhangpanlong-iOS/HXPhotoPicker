@@ -51,7 +51,6 @@ extension PhotoPickerController {
             }else {
                 // 获取封面
                 self.cameraAssetCollection = assetCollection
-                self.cameraAssetCollection?.fetchCoverAsset()
             }
             if self.config.albumShowMode == .popup {
                 self.fetchAssetCollections()
@@ -62,8 +61,9 @@ extension PhotoPickerController {
     
     /// 获取相册集合
     func fetchAssetCollections() {
-        assetCollectionsQueue.cancelAllOperations()
-        let operation = BlockOperation.init {
+        cancelAssetCollectionsQueue()
+        let operation = BlockOperation()
+        operation.addExecutionBlock { [unowned operation] in
             if self.config.creationDate {
                 self.options.sortDescriptors = [
                     NSSortDescriptor(
@@ -83,12 +83,12 @@ extension PhotoPickerController {
             for phAsset in self.selectedAssetArray where
                 phAsset.phAsset == nil {
                 let inLocal = self.localAssetArray.contains(
-                    where: { (localAsset) -> Bool in
-                    return localAsset.isEqual(phAsset)
+                    where: {
+                    $0.isEqual(phAsset)
                 })
                 let inLocalCamera = self.localCameraAssetArray.contains(
-                    where: { (localAsset) -> Bool in
-                        return localAsset.isEqual(phAsset)
+                    where: {
+                        $0.isEqual(phAsset)
                     }
                 )
                 if !inLocal && !inLocalCamera {
@@ -98,6 +98,9 @@ extension PhotoPickerController {
                     }
                     localCount += 1
                 }
+            }
+            if operation.isCancelled {
+                return
             }
             if !self.config.allowLoadPhotoLibrary {
                 DispatchQueue.main.async {
@@ -111,36 +114,41 @@ extension PhotoPickerController {
             PhotoManager.shared.fetchAssetCollections(
                 for: self.options,
                 showEmptyCollection: false
-            ) { [weak self] (assetCollection, isCameraRoll) in
-                guard let self = self else { return }
-                if assetCollection != nil {
-                    // 获取封面
-                    assetCollection?.fetchCoverAsset()
-                    assetCollection?.count += localCount
+            ) { [weak self] (assetCollection, isCameraRoll, stop) in
+                guard let self = self else {
+                    stop.pointee = true
+                    return
+                }
+                if operation.isCancelled {
+                    stop.pointee = true
+                    return
+                }
+                if let assetCollection = assetCollection {
+                    if let collection = assetCollection.collection,
+                       let canAdd = self.pickerDelegate?.pickerController(self, didFetchAssetCollections: collection) {
+                        if !canAdd {
+                            return
+                        }
+                    }
+                    assetCollection.count += localCount
                     if isCameraRoll {
-                        self.assetCollectionsArray.insert(assetCollection!, at: 0)
+                        self.assetCollectionsArray.insert(assetCollection, at: 0)
                     }else {
-                        self.assetCollectionsArray.append(assetCollection!)
+                        self.assetCollectionsArray.append(assetCollection)
                     }
                 }else {
-                    if self.cameraAssetCollection != nil {
+                    if let cameraAssetCollection = self.cameraAssetCollection {
                         self.cameraAssetCollection?.count += localCount
                         if coverImage != nil {
                             self.cameraAssetCollection?.realCoverImage = coverImage
                         }
                         if !self.assetCollectionsArray.isEmpty {
-                            self.assetCollectionsArray[0] = self.cameraAssetCollection!
+                            self.assetCollectionsArray[0] = cameraAssetCollection
                         }else {
-                            self.assetCollectionsArray.append(self.cameraAssetCollection!)
+                            self.assetCollectionsArray.append(cameraAssetCollection)
                         }
                     }
                     DispatchQueue.main.async {
-                        if let operation =
-                            self.assetCollectionsQueue.operations.first {
-                            if operation.isCancelled {
-                                return
-                            }
-                        }
                         self.fetchAssetCollectionsCompletion?(self.assetCollectionsArray)
                     }
                 }
@@ -148,85 +156,108 @@ extension PhotoPickerController {
         }
         assetCollectionsQueue.addOperation(operation)
     }
+    func cancelAssetCollectionsQueue() {
+        assetCollectionsQueue.cancelAllOperations()
+    }
+    private func getSelectAsset() -> ([PHAsset], [PhotoAsset]) {
+        var selectedAssets = [PHAsset]()
+        var selectedPhotoAssets: [PhotoAsset] = []
+        var localIndex = -1
+        for (index, photoAsset) in selectedAssetArray.enumerated() {
+            if config.selectMode == .single {
+                break
+            }
+            photoAsset.selectIndex = index
+            photoAsset.isSelected = true
+            if let phAsset = photoAsset.phAsset {
+                selectedAssets.append(phAsset)
+                selectedPhotoAssets.append(photoAsset)
+            }else {
+                let inLocal = localAssetArray
+                    .contains {
+                    if $0.isEqual(photoAsset) {
+                        localAssetArray[localAssetArray.firstIndex(of: $0)!] = photoAsset
+                        return true
+                    }
+                    return false
+                }
+                let inLocalCamera = localCameraAssetArray
+                    .contains(where: {
+                    if $0.isEqual(photoAsset) {
+                        localCameraAssetArray[
+                            localCameraAssetArray.firstIndex(of: $0)!
+                        ] = photoAsset
+                        return true
+                    }
+                    return false
+                })
+                if !inLocal && !inLocalCamera {
+                    if photoAsset.localIndex > localIndex {
+                        localIndex = photoAsset.localIndex
+                        localAssetArray.insert(photoAsset, at: 0)
+                    }else {
+                        if localIndex == -1 {
+                            localIndex = photoAsset.localIndex
+                            localAssetArray.insert(photoAsset, at: 0)
+                        }else {
+                            localAssetArray.insert(photoAsset, at: 1)
+                        }
+                    }
+                }
+            }
+        }
+        return (selectedAssets, selectedPhotoAssets)
+    }
     /// 获取相册里的资源
     /// - Parameters:
     ///   - assetCollection: 相册
     ///   - completion: 完成回调
     func fetchPhotoAssets(
         assetCollection: PhotoAssetCollection?,
-        completion: @escaping ([PhotoAsset], PhotoAsset?) -> Void
+        completion: (([PhotoAsset], PhotoAsset?, Int, Int) -> Void)?
     ) {
-        DispatchQueue.global().async {
-            for photoAsset in self.localAssetArray {
-                photoAsset.isSelected = false
-            }
-            for photoAsset in self.localCameraAssetArray {
-                photoAsset.isSelected = false
-            }
-            var selectedAssets = [PHAsset]()
-            var selectedPhotoAssets: [PhotoAsset] = []
+        cancelFetchAssetsQueue()
+        let operation = BlockOperation()
+        operation.addExecutionBlock { [unowned operation] in
+            var photoCount = 0
+            var videoCount = 0
+            self.localAssetArray.forEach { $0.isSelected = false }
+            self.localCameraAssetArray.forEach { $0.isSelected = false }
+            let result = self.getSelectAsset()
+            let selectedAssets = result.0
+            let selectedPhotoAssets = result.1
             var localAssets: [PhotoAsset] = []
-            var localIndex = -1
-            for (index, photoAsset) in self.selectedAssetArray.enumerated() {
-                if self.config.selectMode == .single {
-                    break
-                }
-                photoAsset.selectIndex = index
-                photoAsset.isSelected = true
-                if let phAsset = photoAsset.phAsset {
-                    selectedAssets.append(phAsset)
-                    selectedPhotoAssets.append(photoAsset)
-                }else {
-                    let inLocal = self
-                        .localAssetArray
-                        .contains { (localAsset) -> Bool in
-                        if localAsset.isEqual(photoAsset) {
-                            self.localAssetArray[self.localAssetArray.firstIndex(of: localAsset)!] = photoAsset
-                            return true
-                        }
-                        return false
-                    }
-                    let inLocalCamera = self
-                        .localCameraAssetArray
-                        .contains(where: { (localAsset) -> Bool in
-                        if localAsset.isEqual(photoAsset) {
-                            self.localCameraAssetArray[
-                                self.localCameraAssetArray.firstIndex(of: localAsset)!
-                            ] = photoAsset
-                            return true
-                        }
-                        return false
-                    })
-                    if !inLocal && !inLocalCamera {
-                        if photoAsset.localIndex > localIndex {
-                            localIndex = photoAsset.localIndex
-                            self.localAssetArray.insert(photoAsset, at: 0)
-                        }else {
-                            if localIndex == -1 {
-                                localIndex = photoAsset.localIndex
-                                self.localAssetArray.insert(photoAsset, at: 0)
-                            }else {
-                                self.localAssetArray.insert(photoAsset, at: 1)
-                            }
-                        }
-                    }
-                }
+            if operation.isCancelled {
+                return
             }
             localAssets.append(contentsOf: self.localCameraAssetArray.reversed())
             localAssets.append(contentsOf: self.localAssetArray)
             var photoAssets = [PhotoAsset]()
             photoAssets.reserveCapacity(assetCollection?.count ?? 10)
             var lastAsset: PhotoAsset?
-            assetCollection?.enumerateAssets(
-                usingBlock: { [weak self] (photoAsset, index, stop) in
-                guard let self = self else { return }
+            assetCollection?.enumerateAssets( usingBlock: { [weak self] (photoAsset, index, stop) in
+                guard let self = self,
+                      let phAsset = photoAsset.phAsset
+                else {
+                    stop.pointee = true
+                    return
+                }
+                if operation.isCancelled {
+                    stop.pointee = true
+                    return
+                }
+                if let canAdd = self.pickerDelegate?.pickerController(self, didFetchAssets: phAsset) {
+                    if !canAdd {
+                        return
+                    }
+                }
                 if self.selectOptions.contains(.gifPhoto) {
-                    if photoAsset.phAsset!.isImageAnimated {
+                    if phAsset.isImageAnimated {
                         photoAsset.mediaSubType = .imageAnimated
                     }
                 }
                 if self.config.selectOptions.contains(.livePhoto) {
-                    if photoAsset.phAsset!.isLivePhoto {
+                    if phAsset.isLivePhoto {
                         photoAsset.mediaSubType = .livePhoto
                     }
                 }
@@ -236,33 +267,44 @@ extension PhotoPickerController {
                     if !self.selectOptions.isPhoto {
                         return
                     }
+                    photoCount += 1
                 case .video:
                     if !self.selectOptions.isVideo {
                         return
                     }
+                    videoCount += 1
                 }
                 var asset = photoAsset
-                if selectedAssets.contains(asset.phAsset!) {
-                    let index = selectedAssets.firstIndex(of: asset.phAsset!)!
-                    let phAsset: PhotoAsset = selectedPhotoAssets[index]
-                    asset = phAsset
-                    lastAsset = phAsset
+                if let index = selectedAssets.firstIndex(of: phAsset) {
+                    let selectPhotoAsset = selectedPhotoAssets[index]
+                    asset = selectPhotoAsset
+                    lastAsset = selectPhotoAsset
                 }
-//                if self.config.photoList.sort == .desc {
-//                    photoAssets.insert(asset, at: 0)
-//                }else {
-                    photoAssets.append(asset)
-//                }
+                photoAssets.append(asset)
             })
+            if self.config.photoList.showAssetNumber {
+                localAssets.forEach {
+                    if $0.mediaType == .photo {
+                        photoCount += 1
+                    }else {
+                        videoCount += 1
+                    }
+                }
+            }
+            photoAssets.append(contentsOf: localAssets.reversed())
             if self.config.photoList.sort == .desc {
                 photoAssets.reverse()
-                photoAssets.insert(contentsOf: localAssets, at: 0)
-            }else {
-                photoAssets.append(contentsOf: localAssets.reversed())
+            }
+            if operation.isCancelled {
+                return
             }
             DispatchQueue.main.async {
-                completion(photoAssets, lastAsset)
+                completion?(photoAssets, lastAsset, photoCount, videoCount)
             }
         }
+        assetsQueue.addOperation(operation)
+    }
+    func cancelFetchAssetsQueue() {
+        assetsQueue.cancelAllOperations()
     }
 }

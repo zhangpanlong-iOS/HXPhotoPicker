@@ -91,7 +91,7 @@ public class AlbumViewController: BaseViewController, UITableViewDataSource, UIT
             pickerController?.config.navigationTitleDarkColor :
             pickerController?.config.navigationTitleColor
     }
-    public override func deviceOrientationDidChanged(notify: Notification) {
+    public override func deviceOrientationWillChanged(notify: Notification) {
         beforeOrientationIndexPath = tableView.indexPathsForVisibleRows?.first
         orientationDidChange = true
     }
@@ -206,15 +206,6 @@ public class AlbumViewController: BaseViewController, UITableViewDataSource, UIT
         pushPhotoPickerController(assetCollection: assetCollection, animated: true)
     }
     
-    public func tableView(
-        _ tableView: UITableView,
-        didEndDisplaying cell: UITableViewCell,
-        forRowAt indexPath: IndexPath
-    ) {
-        let myCell: AlbumViewCell = cell as! AlbumViewCell
-        myCell.cancelRequest()
-    }
-    
     private func changeSubviewFrame() {
         if AssetManager.authorizationStatusIsLimited() {
             promptLb.width = view.width
@@ -289,8 +280,5 @@ public class AlbumViewController: BaseViewController, UITableViewDataSource, UIT
                 configColor()
             }
         }
-    }
-    deinit {
-        NotificationCenter.default.removeObserver(self)
     }
 }

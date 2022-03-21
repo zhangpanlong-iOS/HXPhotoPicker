@@ -55,7 +55,7 @@ public class EditorToolView: UIView {
     }()
     
     func reloadContentInset() {
-        collectionView.contentInset = UIEdgeInsets(top: 0, left: 12 + UIDevice.leftMargin, bottom: 0, right: 0)
+        collectionView.contentInset = UIEdgeInsets(top: 0, left: 12 + UIDevice.leftMargin, bottom: 0, right: 12)
     }
     
     public lazy var finishButton: UIButton = {
@@ -124,10 +124,6 @@ public class EditorToolView: UIView {
         }
     }
     
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-    
     public override func layoutSubviews() {
         super.layoutSubviews()
         maskLayer.frame = CGRect(
@@ -146,7 +142,11 @@ public class EditorToolView: UIView {
         finishButton.height = 33
         finishButton.x = width - finishButton.width - 12 - UIDevice.rightMargin
         finishButton.centerY = 25
-        collectionView.width = finishButton.x - 12
+        collectionView.width = finishButton.x
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }
 

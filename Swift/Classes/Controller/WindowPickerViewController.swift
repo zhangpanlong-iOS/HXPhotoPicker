@@ -19,8 +19,12 @@ class WindowPickerViewController: UIViewController {
         manager.config.photoList.cell.backgroundColor = .white
         manager.config.photoList.cell.targetWidth = 300
         manager.config.photoList.cameraCell.allowPreview = false
+        manager.config.photoList.cameraCell.backgroundColor = UIColor(hexString: "#f1f1f1")
         manager.config.photoList.emptyView.titleColor = UIColor(hexString: "#666666")
         manager.config.photoList.emptyView.subTitleColor = UIColor(hexString: "#666666")
+        manager.config.photoList.limitCell.lineColor = UIColor(hexString: "#999999")
+        manager.config.photoList.limitCell.titleColor = UIColor(hexString: "#999999")
+        manager.config.photoList.limitCell.backgroundColor = UIColor(hexString: "#f1f1f1")
         manager.config.notAuthorized.backgroundColor = .white
         manager.config.notAuthorized.titleColor = UIColor(hexString: "#666666")
         manager.config.notAuthorized.subTitleColor = UIColor(hexString: "#666666")
@@ -264,6 +268,9 @@ class WindowPickerViewController: UIViewController {
         changeButton.hx.centerX = view.hx.width * 0.5
         view.addSubview(changeButton)
         pickerView.fetchAsset()
+        
+        /// 获取相册列表
+//        print(manager.fetchAssetCollections(for: .init()))
     }
     
     @objc
@@ -440,6 +447,17 @@ extension WindowPickerViewController: PhotoPickerViewDelegate {
         let point = gestureRecognizer.location(in: UIApplication.shared.keyWindow)
         if point.y < sendBgView.frame.maxY {
             view.hx.showSuccess(text: "发送成功", delayHide: 1.5, animated: true)
+            /*
+             获取Asset的URL
+             photoAsset.getAssetURL { result in
+                 switch result {
+                 case .success(let result):
+                     print(result.url)
+                 case .failure(let error):
+                     print(error)
+                 }
+             }
+             */
             if photoAsset.isSelected {
                 pickerView.deselect(at: photoAsset)
             }

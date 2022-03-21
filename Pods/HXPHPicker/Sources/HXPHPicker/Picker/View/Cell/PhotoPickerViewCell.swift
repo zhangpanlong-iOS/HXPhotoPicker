@@ -10,9 +10,18 @@ import UIKit
 import Photos
 
 open class PhotoPickerViewCell: PhotoPickerBaseViewCell {
+    
+    /// iCloud标示
+    public lazy var iCloudMarkView: UIImageView = {
+        let view = UIImageView(image: "hx_picker_photo_icloud_mark".image)
+        view.size = view.image?.size ?? .zero
+        view.isHidden = true
+        return view
+    }()
+    
     /// 资源类型标签背景
     public lazy var assetTypeMaskView: UIView = {
-        let assetTypeMaskView = UIView.init()
+        let assetTypeMaskView = UIView()
         assetTypeMaskView.isHidden = true
         assetTypeMaskView.layer.addSublayer(assetTypeMaskLayer)
         return assetTypeMaskView
@@ -49,64 +58,28 @@ open class PhotoPickerViewCell: PhotoPickerBaseViewCell {
     
     /// 禁用遮罩
     public lazy var disableMaskLayer: CALayer = {
-        let disableMaskLayer = CALayer.init()
+        let disableMaskLayer = CALayer()
         disableMaskLayer.backgroundColor = UIColor.white.withAlphaComponent(0.6).cgColor
-        disableMaskLayer.frame = bounds
         disableMaskLayer.isHidden = true
         return disableMaskLayer
     }()
     
+    /// 获取视频时长时的 AVAsset 对象
+    var videoDurationAsset: AVAsset?
+    
     /// 资源对象
     open override var photoAsset: PhotoAsset! {
         didSet {
-            switch photoAsset.mediaSubType {
-            case .imageAnimated, .localGifImage:
-                assetTypeLb.text = "GIF"
-                assetTypeMaskView.isHidden = false
-            case .networkImage(let isGif):
-                assetTypeLb.text = isGif ? "GIF" : nil
-                assetTypeMaskView.isHidden = !isGif
-            case .livePhoto:
-                assetTypeLb.text = "Live"
-                assetTypeMaskView.isHidden = false
-            case .video, .localVideo, .networkVideo:
-                if let videoTime = photoAsset.videoTime {
-                    assetTypeLb.text = videoTime
-                }else {
-                    assetTypeLb.text = nil
-                    PhotoTools.getVideoDuration(for: photoAsset) { [weak self] (asset, duration) in
-                        guard let self = self else { return }
-                        if self.photoAsset == asset {
-                            self.assetTypeLb.text = asset.videoTime
-                        }
-                    }
-                }
-                assetTypeMaskView.isHidden = false
-//                #if HXPICKER_ENABLE_EDITOR
-//                if photoAsset.videoEdit == nil {
-//                    assetTypeIcon.image = UIImage.image(for: "hx_picker_cell_video_icon")
-//                }else {
-//                    assetTypeIcon.image = UIImage.image(for: "hx_picker_cell_video_edit_icon")
-//                }
-//                #endif
-            default:
-                assetTypeLb.text = nil
-                assetTypeMaskView.isHidden = true
-            }
-            assetEditMarkIcon.isHidden = true
-            if photoAsset.mediaType == .photo {
-                #if HXPICKER_ENABLE_EDITOR
-                if let photoEdit = photoAsset.photoEdit {
-                    if photoEdit.imageType == .normal {
-                        assetTypeLb.text = nil
-                    }
-                    assetEditMarkIcon.isHidden = false
-                    assetTypeMaskView.isHidden = false
-                }
-                #endif
-            }
-            assetTypeIcon.isHidden = photoAsset.mediaType != .video
+            cancelGetVideoDuration()
+            setupState()
         }
+    }
+    
+    open override func requestICloudStateCompletion(_ inICloud: Bool) {
+        super.requestICloudStateCompletion(inICloud)
+        self.inICloud = inICloud
+        iCloudMarkView.isHidden = !inICloud
+        setupDisableMask()
     }
     
     /// 选中遮罩
@@ -135,6 +108,7 @@ open class PhotoPickerViewCell: PhotoPickerBaseViewCell {
         contentView.addSubview(assetTypeIcon)
         contentView.addSubview(assetEditMarkIcon)
         contentView.layer.addSublayer(disableMaskLayer)
+        contentView.addSubview(iCloudMarkView)
     }
     
     /// 触发选中回调
@@ -144,11 +118,18 @@ open class PhotoPickerViewCell: PhotoPickerBaseViewCell {
     
     /// 设置禁用遮罩
     open func setupDisableMask() {
+        if inICloud {
+            disableMaskLayer.isHidden = false
+            return
+        }
         disableMaskLayer.isHidden = canSelect
     }
     /// 布局
     open override func layoutView() {
         super.layoutView()
+        iCloudMarkView.x = width - iCloudMarkView.width - 5
+        iCloudMarkView.y = 5
+        
         selectMaskLayer.frame = photoView.bounds
         disableMaskLayer.frame = photoView.bounds
         assetTypeMaskView.frame = CGRect(x: 0, y: photoView.height - 25, width: width, height: 25)
@@ -181,5 +162,87 @@ open class PhotoPickerViewCell: PhotoPickerBaseViewCell {
         if !photoAsset.isSelected {
             selectMaskLayer.isHidden = !isHighlighted
         }
+    }
+    
+    open override func requestThumbnailCompletion(_ image: UIImage?) {
+        super.requestThumbnailCompletion(image)
+        if !didLoadCompletion {
+            didLoadCompletion = true
+            setupState()
+        }
+    }
+    
+    open override func cancelICloudRequest() {
+        super.cancelICloudRequest()
+        iCloudMarkView.isHidden = true
+    }
+    private var didLoadCompletion: Bool = false
+    
+    deinit {
+        disableMaskLayer.backgroundColor = nil
+    }
+}
+
+// MARK: request
+extension PhotoPickerViewCell {
+    
+    func cancelGetVideoDuration() {
+        if let avAsset = videoDurationAsset {
+            avAsset.cancelLoading()
+            videoDurationAsset = nil
+        }
+    }
+}
+
+// MARK: private
+extension PhotoPickerViewCell {
+    
+    private func setupState() {
+        if !didLoadCompletion {
+            return
+        }
+        if photoAsset.isGifAsset {
+            assetTypeLb.text = "GIF"
+            assetTypeMaskView.isHidden = false
+        }else if photoAsset.mediaSubType.isVideo {
+            if let videoTime = photoAsset.videoTime {
+                assetTypeLb.text = videoTime
+            }else {
+                assetTypeLb.text = nil
+                videoDurationAsset = PhotoTools.getVideoDuration(for: photoAsset) { [weak self] (asset, duration) in
+                    guard let self = self else { return }
+                    if self.photoAsset == asset {
+                        self.assetTypeLb.text = asset.videoTime
+                        self.videoDurationAsset = nil
+                    }
+                }
+            }
+            assetTypeMaskView.isHidden = false
+//                #if HXPICKER_ENABLE_EDITOR
+//                if photoAsset.videoEdit == nil {
+//                    assetTypeIcon.image = UIImage.image(for: "hx_picker_cell_video_icon")
+//                }else {
+//                    assetTypeIcon.image = UIImage.image(for: "hx_picker_cell_video_edit_icon")
+//                }
+//                #endif
+        }else if photoAsset.mediaSubType == .livePhoto ||
+                    photoAsset.mediaSubType == .localLivePhoto {
+            assetTypeLb.text = "Live"
+            assetTypeMaskView.isHidden = false
+        }else {
+            assetTypeLb.text = nil
+            assetTypeMaskView.isHidden = true
+        }
+        assetEditMarkIcon.isHidden = true
+        if photoAsset.mediaType == .photo {
+            #if HXPICKER_ENABLE_EDITOR
+            if let photoEdit = photoAsset.photoEdit {
+                assetTypeLb.text = photoEdit.imageType == .gif ? "GIF" : nil
+                assetTypeMaskView.isHidden = false
+                assetEditMarkIcon.isHidden = false
+            }
+            #endif
+        }
+        assetTypeIcon.isHidden = photoAsset.mediaType != .video
     }
 }

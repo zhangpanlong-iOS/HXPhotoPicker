@@ -7,19 +7,21 @@
 
 import UIKit
 import CoreLocation
+import AVFoundation
 
 open class CameraController: UINavigationController {
     
     public enum CameraType {
         case normal
-        #if canImport(GPUImage)
-        case gpu
-        #endif
     }
     
+    /// 相机拍摄类型
     public enum CaptureType {
+        // 拍照
         case photo
+        // 录制
         case video
+        // 拍照和录制
         case all
     }
     
@@ -57,6 +59,7 @@ open class CameraController: UINavigationController {
         self.config = config
         cameraDelegate = delegate
         super.init(nibName: nil, bundle: nil)
+        modalPresentationStyle = config.modalPresentationStyle
         let cameraVC = CameraViewController(
             config: config,
             type: type,
@@ -120,5 +123,23 @@ extension CameraController: CameraViewControllerDelegate {
     }
     public func cameraViewController(didCancel cameraViewController: CameraViewController) {
         cameraDelegate?.cameraController(didCancel: self)
+    }
+    public func cameraViewController(
+        _ cameraViewController: CameraViewController,
+        flashModeDidChanged flashMode: AVCaptureDevice.FlashMode
+    ) {
+        cameraDelegate?.cameraController(self, flashModeDidChanged: flashMode)
+    }
+    public func cameraViewController(
+        _ cameraViewController: CameraViewController,
+        didSwitchCameraCompletion position: AVCaptureDevice.Position
+    ) {
+        cameraDelegate?.cameraController(self, didSwitchCameraCompletion: position)
+    }
+    public func cameraViewController(
+        _ cameraViewController: CameraViewController,
+        didChangeTakeType takeType: CameraBottomViewTakeType
+    ) {
+        cameraDelegate?.cameraController(self, didChangeTakeType: takeType)
     }
 }

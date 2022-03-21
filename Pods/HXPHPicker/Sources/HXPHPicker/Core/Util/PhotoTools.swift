@@ -35,7 +35,7 @@ public struct PhotoTools {
             width = targetWidth / height * width * scale
             height = targetWidth * scale
         }
-        return CGSize.init(width: width, height: height)
+        return CGSize(width: width, height: height)
     }
     
     /// 转换视频时长为 mm:ss 格式的字符串
@@ -158,6 +158,12 @@ public struct PhotoTools {
     ) -> AVAsset {
         let asset = AVURLAsset(url: url)
         asset.loadValuesAsynchronously(forKeys: ["duration"]) {
+            if asset.statusOfValue(forKey: "duration", error: nil) != .loaded {
+                DispatchQueue.main.async {
+                    completion(url, nil, .failed)
+                }
+                return
+            }
             let generator = AVAssetImageGenerator(asset: asset)
             generator.appliesPreferredTrackTransform = true
 //            generator.requestedTimeToleranceAfter = .zero
@@ -365,14 +371,15 @@ public struct PhotoTools {
         _ keyPath: String,
         _ fromValue: Any?,
         _ toValue: Any?,
-        _ duration: TimeInterval
+        _ duration: TimeInterval,
+        _ timingFunctionName: CAMediaTimingFunctionName = .linear
     ) -> CABasicAnimation {
-        let animation = CABasicAnimation.init(keyPath: keyPath)
+        let animation = CABasicAnimation(keyPath: keyPath)
         animation.fromValue = fromValue
         animation.toValue = toValue
         animation.duration = duration
         animation.fillMode = .backwards
-        animation.timingFunction = .init(name: CAMediaTimingFunctionName.linear)
+        animation.timingFunction = .init(name: timingFunctionName)
         return animation
     }
     
@@ -396,6 +403,20 @@ public struct PhotoTools {
         layer.borderWidth = 0.0
         return layer
     }
+    
+    #if HXPICKER_ENABLE_EDITOR || HXPICKER_ENABLE_CAMERA
+    static func getColor(red: Int, green: Int, blue: Int, alpha: Int = 255) -> CIColor {
+        return CIColor(red: CGFloat(Double(red) / 255.0),
+                       green: CGFloat(Double(green) / 255.0),
+                       blue: CGFloat(Double(blue) / 255.0),
+                       alpha: CGFloat(Double(alpha) / 255.0))
+    }
+    
+    static func getColorImage(red: Int, green: Int, blue: Int, alpha: Int = 255, rect: CGRect) -> CIImage {
+        let color = self.getColor(red: red, green: green, blue: blue, alpha: alpha)
+        return CIImage(color: color).cropped(to: rect)
+    }
+    #endif
     
     private init() { }
 }

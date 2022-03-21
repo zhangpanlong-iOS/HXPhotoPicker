@@ -10,6 +10,7 @@
 #import "HXPhotoManager.h"
 #import "HXCustomCollectionReusableView.h"
 #import "HXPhotoLimitView.h"
+#import "HXPickerResult.h"
 
 @class
 HXPhotoViewController ,
@@ -42,6 +43,9 @@ HXCustomCameraController;
                      photos:(NSArray<HXPhotoModel *> *)photoList
                      videos:(NSArray<HXPhotoModel *> *)videoList
                    original:(BOOL)original;
+
+- (void)photoViewController:(HXPhotoViewController *)photoViewController
+          didDoneWithResult:(HXPickerResult *)result;
 
 /**
  改变了选择
@@ -109,6 +113,18 @@ HXCustomCameraController;
 @property (strong, nonatomic) UIColor *bgColor;
 - (void)starRunning;
 - (void)stopRunning;
+@end
+
+@interface HXPhotoLimitViewCell : UICollectionViewCell
+@property (strong, nonatomic) UIColor *bgColor;
+@property (strong, nonatomic) UIColor *bgDarkColor;
+@property (strong, nonatomic) UIColor *lineColor;
+@property (strong, nonatomic) UIColor *lineDarkColor;
+@property (strong, nonatomic) UIColor *textColor;
+@property (strong, nonatomic) UIColor *textDarkColor;
+@property (strong, nonatomic) UIFont *textFont;
+
+- (void)config;
 @end
 
 @interface HXPhotoViewSectionFooterView : UICollectionReusableView

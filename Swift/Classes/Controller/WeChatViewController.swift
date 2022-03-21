@@ -175,8 +175,10 @@ class WeChatViewCell: UITableViewCell {
         view.hidesWhenStopped = true
         return view
     }()
+    var avAsset: AVAsset?
     var photoAsset: PhotoAsset! {
         didSet {
+            avAsset?.cancelLoading()
             pictureView.cancelRequest()
             pictureView.photoAsset = photoAsset
             if photoAsset.isGifAsset {
@@ -187,7 +189,8 @@ class WeChatViewCell: UITableViewCell {
                     stateLb.text = "GIF"
                     stateMaskLayer.isHidden = false
                 }
-            }else if photoAsset.mediaSubType == .livePhoto {
+            }else if photoAsset.mediaSubType == .livePhoto ||
+                        photoAsset.mediaSubType == .localLivePhoto {
                 stateLb.text = "Live"
                 stateMaskLayer.isHidden = false
             }else {
@@ -196,7 +199,7 @@ class WeChatViewCell: UITableViewCell {
                         stateLb.text = videoTime
                     }else {
                         stateLb.text = nil
-                        PhotoTools.getVideoDuration(for: photoAsset) { [weak self] (asset, duration) in
+                        avAsset = PhotoTools.getVideoDuration(for: photoAsset) { [weak self] (asset, duration) in
                             guard let self = self else { return }
                             if self.photoAsset == asset {
                                 self.stateLb.text = asset.videoTime
@@ -268,7 +271,7 @@ extension WeChatViewCell: UIContextMenuInteractionDelegate {
         _ interaction: UIContextMenuInteraction,
         configurationForMenuAtLocation location: CGPoint
     ) -> UIContextMenuConfiguration? {
-        guard let viewSize = hx.viewController()?.view.hx.size else {
+        guard let viewSize = hx.viewController?.view.hx.size else {
             return nil
         }
         return .init(identifier: nil) {

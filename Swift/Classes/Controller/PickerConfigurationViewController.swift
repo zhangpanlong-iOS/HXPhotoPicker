@@ -12,15 +12,8 @@ class PickerConfigurationViewController: UITableViewController {
     
     var config: PickerConfiguration = .init()
     var showOpenPickerButton: Bool = true
-    var presentStyle: UIModalPresentationStyle = .fullScreen
     override func viewDidLoad() {
         super.viewDidLoad()
-        if #available(iOS 13.0, *) {
-            presentStyle = .automatic
-        } else {
-            // Fallback on earlier versions
-            presentStyle = .fullScreen
-        }
         navigationItem.title = "Picker"
         
         tableView.cellLayoutMarginsFollowReadableWidth = true
@@ -37,8 +30,6 @@ class PickerConfigurationViewController: UITableViewController {
     @objc func openPickerController() {
         if showOpenPickerButton {
             let vc = PhotoPickerController.init(config: config)
-            // 全屏情况下才可以禁止旋转
-            vc.modalPresentationStyle = presentStyle
             vc.pickerDelegate = self
             vc.autoDismiss = false
             present(vc, animated: true, completion: nil)
@@ -208,7 +199,7 @@ extension PickerConfigurationViewController {
     }
     func presentStyleAction(_ indexPath: IndexPath) {
         if #available(iOS 13.0, *) {
-            presentStyle = presentStyle == .fullScreen ? .automatic : .fullScreen
+            config.modalPresentationStyle = config.modalPresentationStyle == .fullScreen ? .automatic : .fullScreen
         }
         self.tableView.reloadRows(at: [indexPath], with: .fade)
     }
@@ -222,11 +213,16 @@ extension PickerConfigurationViewController {
             "korean",
             "english",
             "thai",
-            "indonesia"
+            "indonesia",
+            "vietnamese",
+            "russian",
+            "german",
+            "french"
         ]
         for title in titles {
-            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { (action) in
-                self.config.languageType = LanguageType.init(rawValue: titles.firstIndex(of: action.title!)!)!
+            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { [weak self] (action) in
+                guard let self = self else { return }
+                self.config.languageType = LanguageType(rawValue: titles.firstIndex(of: action.title!)!)!
                 self.tableView.reloadRows(at: [indexPath], with: .fade)
             }))
         }
@@ -237,7 +233,8 @@ extension PickerConfigurationViewController {
         let alert = UIAlertController.init(title: "appearanceStyle", message: nil, preferredStyle: .alert)
         let titles = ["varied", "normal", "dark"]
         for title in titles {
-            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { (action) in
+            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { [weak self] (action) in
+                guard let self = self else { return }
                 self.config.appearanceStyle = AppearanceStyle.init(rawValue: titles.firstIndex(of: action.title!)!)!
                 self.tableView.reloadRows(at: [indexPath], with: .fade)
             }))
@@ -251,35 +248,45 @@ extension PickerConfigurationViewController {
     }
     func selectOptionsAction(_ indexPath: IndexPath) {
         let alert = UIAlertController.init(title: "selectOptions", message: nil, preferredStyle: .alert)
-        alert.addAction(UIAlertAction.init(title: "photo", style: .default, handler: { (action) in
+        alert.addAction(UIAlertAction.init(title: "photo", style: .default, handler: { [weak self](action) in
+            guard let self = self else { return }
             self.config.selectOptions = .photo
             self.tableView.reloadRows(at: [indexPath], with: .fade)
         }))
-        alert.addAction(UIAlertAction.init(title: "gif+photo", style: .default, handler: { (action) in
+        alert.addAction(UIAlertAction.init(title: "gif+photo", style: .default, handler: { [weak self] (action) in
+            guard let self = self else { return }
             self.config.selectOptions = [.gifPhoto]
             self.tableView.reloadRows(at: [indexPath], with: .fade)
         }))
-        alert.addAction(UIAlertAction.init(title: "livePhoto+photo", style: .default, handler: { (action) in
+        alert.addAction(UIAlertAction.init(title: "livePhoto+photo", style: .default, handler: { [weak self] (action) in
+            guard let self = self else { return }
             self.config.selectOptions = [.livePhoto]
             self.tableView.reloadRows(at: [indexPath], with: .fade)
         }))
-        alert.addAction(UIAlertAction.init(title: "video", style: .default, handler: { (action) in
+        alert.addAction(UIAlertAction.init(title: "video", style: .default, handler: { [weak self] (action) in
+            guard let self = self else { return }
             self.config.selectOptions = .video
             self.tableView.reloadRows(at: [indexPath], with: .fade)
         }))
-        alert.addAction(UIAlertAction.init(title: "photo+video", style: .default, handler: { (action) in
+        alert.addAction(UIAlertAction.init(title: "photo+video", style: .default, handler: { [weak self] (action) in
+            guard let self = self else { return }
             self.config.selectOptions = [.photo, .video]
             self.tableView.reloadRows(at: [indexPath], with: .fade)
         }))
-        alert.addAction(UIAlertAction.init(title: "photo+gif+video", style: .default, handler: { (action) in
+        alert.addAction(UIAlertAction.init(title: "photo+gif+video", style: .default, handler: { [weak self] (action) in
+            guard let self = self else { return }
             self.config.selectOptions = [.gifPhoto, .video]
             self.tableView.reloadRows(at: [indexPath], with: .fade)
         }))
-        alert.addAction(UIAlertAction.init(title: "photo+livephoto+video", style: .default, handler: { (action) in
+        alert.addAction(
+            UIAlertAction(title: "photo+livephoto+video", style: .default, handler: { [weak self] (action) in
+            guard let self = self else { return }
             self.config.selectOptions = [.livePhoto, .video]
             self.tableView.reloadRows(at: [indexPath], with: .fade)
         }))
-        alert.addAction(UIAlertAction.init(title: "photo+gif+livephoto+video", style: .default, handler: { (action) in
+        alert.addAction(
+            UIAlertAction(title: "photo+gif+livephoto+video", style: .default, handler: { [weak self] (action) in
+            guard let self = self else { return }
             self.config.selectOptions = [.gifPhoto, .livePhoto, .video]
             self.tableView.reloadRows(at: [indexPath], with: .fade)
         }))
@@ -290,7 +297,8 @@ extension PickerConfigurationViewController {
         let alert = UIAlertController.init(title: "selectMode", message: nil, preferredStyle: .alert)
         let titles = ["single", "multiple"]
         for title in titles {
-            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { (action) in
+            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { [weak self] (action) in
+                guard let self = self else { return }
                 self.config.selectMode = PickerSelectMode.init(rawValue: titles.firstIndex(of: action.title!)!)!
                 self.tableView.reloadRows(at: [indexPath], with: .fade)
             }))
@@ -311,7 +319,8 @@ extension PickerConfigurationViewController {
         let alert = UIAlertController.init(title: "albumShowMode", message: nil, preferredStyle: .alert)
         let titles = ["normal", "popup"]
         for title in titles {
-            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { (action) in
+            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { [weak self] (action) in
+                guard let self = self else { return }
                 self.config.albumShowMode = AlbumShowMode.init(rawValue: titles.firstIndex(of: action.title!)!)!
                 self.tableView.reloadRows(at: [indexPath], with: .fade)
             }))
@@ -331,7 +340,8 @@ extension PickerConfigurationViewController {
         let alert = UIAlertController.init(title: "photoSelectionTapAction", message: nil, preferredStyle: .alert)
         let titles = ["preview", "quickSelect", "openEditor"]
         for title in titles {
-            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { (action) in
+            alert.addAction(UIAlertAction(title: title, style: .default, handler: { [weak self] (action) in
+                guard let self = self else { return }
                 let index = titles.firstIndex(of: action.title!)!
                 self.config.photoSelectionTapAction = index == 0 ? .preview : index == 1 ? .quickSelect : .openEditor
                 self.tableView.reloadRows(at: [indexPath], with: .fade)
@@ -344,7 +354,8 @@ extension PickerConfigurationViewController {
         let alert = UIAlertController.init(title: "videoSelectionTapAction", message: nil, preferredStyle: .alert)
         let titles = ["preview", "quickSelect", "openEditor"]
         for title in titles {
-            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { (action) in
+            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { [weak self] (action) in
+                guard let self = self else { return }
                 let index = titles.firstIndex(of: action.title!)!
                 self.config.videoSelectionTapAction = index == 0 ? .preview : index == 1 ? .quickSelect : .openEditor
                 self.tableView.reloadRows(at: [indexPath], with: .fade)
@@ -355,11 +366,13 @@ extension PickerConfigurationViewController {
     }
     func maximumSelectedPhotoCountAction(_ indexPath: IndexPath) {
         let alert = UIAlertController.init(title: "maximumSelectedPhotoCount", message: nil, preferredStyle: .alert)
-        alert.addTextField { (textfield) in
+        alert.addTextField { [weak self] (textfield) in
+            guard let self = self else { return }
             textfield.keyboardType = .numberPad
             textfield.text = String(self.config.maximumSelectedPhotoCount)
         }
-        alert.addAction(UIAlertAction.init(title: "确定", style: .default, handler: { (action) in
+        alert.addAction(UIAlertAction.init(title: "确定", style: .default, handler: { [weak self] (action) in
+            guard let self = self else { return }
             let textFiled = alert.textFields?.first
             self.config.maximumSelectedPhotoCount = Int(textFiled?.text ?? "0") ?? 0
             self.tableView.reloadRows(at: [indexPath], with: .fade)
@@ -369,11 +382,13 @@ extension PickerConfigurationViewController {
     }
     func maximumSelectedVideoCountAction(_ indexPath: IndexPath) {
         let alert = UIAlertController.init(title: "maximumSelectedVideoCount", message: nil, preferredStyle: .alert)
-        alert.addTextField { (textfield) in
+        alert.addTextField { [weak self] (textfield) in
+            guard let self = self else { return }
             textfield.keyboardType = .numberPad
             textfield.text = String(self.config.maximumSelectedVideoCount)
         }
-        alert.addAction(UIAlertAction.init(title: "确定", style: .default, handler: { (action) in
+        alert.addAction(UIAlertAction.init(title: "确定", style: .default, handler: { [weak self] (action) in
+            guard let self = self else { return }
             let textFiled = alert.textFields?.first
             self.config.maximumSelectedVideoCount = Int(textFiled?.text ?? "0") ?? 0
             self.tableView.reloadRows(at: [indexPath], with: .fade)
@@ -383,11 +398,13 @@ extension PickerConfigurationViewController {
     }
     func maximumSelectedCountAction(_ indexPath: IndexPath) {
         let alert = UIAlertController.init(title: "maximumSelectedCount", message: nil, preferredStyle: .alert)
-        alert.addTextField { (textfield) in
+        alert.addTextField { [weak self] (textfield) in
+            guard let self = self else { return }
             textfield.keyboardType = .numberPad
             textfield.text = String(self.config.maximumSelectedCount)
         }
-        alert.addAction(UIAlertAction.init(title: "确定", style: .default, handler: { (action) in
+        alert.addAction(UIAlertAction.init(title: "确定", style: .default, handler: { [weak self] (action) in
+            guard let self = self else { return }
             let textFiled = alert.textFields?.first
             self.config.maximumSelectedCount = Int(textFiled?.text ?? "0") ?? 0
             self.tableView.reloadRows(at: [indexPath], with: .fade)
@@ -397,11 +414,13 @@ extension PickerConfigurationViewController {
     }
     func maximumSelectedVideoDurationAction(_ indexPath: IndexPath) {
         let alert = UIAlertController.init(title: "maximumSelectedVideoDuration", message: nil, preferredStyle: .alert)
-        alert.addTextField { (textfield) in
+        alert.addTextField { [weak self] (textfield) in
+            guard let self = self else { return }
             textfield.keyboardType = .numberPad
             textfield.text = String(self.config.maximumSelectedVideoDuration)
         }
-        alert.addAction(UIAlertAction.init(title: "确定", style: .default, handler: { (action) in
+        alert.addAction(UIAlertAction(title: "确定", style: .default, handler: { [weak self]  (action) in
+            guard let self = self else { return }
             let textFiled = alert.textFields?.first
             self.config.maximumSelectedVideoDuration = Int(textFiled?.text ?? "0") ?? 0
             self.tableView.reloadRows(at: [indexPath], with: .fade)
@@ -411,11 +430,13 @@ extension PickerConfigurationViewController {
     }
     func minimumSelectedVideoDurationAction(_ indexPath: IndexPath) {
         let alert = UIAlertController.init(title: "minimumSelectedVideoDuration", message: nil, preferredStyle: .alert)
-        alert.addTextField { (textfield) in
+        alert.addTextField { [weak self] (textfield) in
+            guard let self = self else { return }
             textfield.keyboardType = .numberPad
             textfield.text = String(self.config.minimumSelectedVideoDuration)
         }
-        alert.addAction(UIAlertAction.init(title: "确定", style: .default, handler: { (action) in
+        alert.addAction(UIAlertAction.init(title: "确定", style: .default, handler: { [weak self] (action) in
+            guard let self = self else { return }
             let textFiled = alert.textFields?.first
             self.config.minimumSelectedVideoDuration = Int(textFiled?.text ?? "0") ?? 0
             self.tableView.reloadRows(at: [indexPath], with: .fade)
@@ -425,11 +446,13 @@ extension PickerConfigurationViewController {
     }
     func photoRowNumberAction(_ indexPath: IndexPath) {
         let alert = UIAlertController.init(title: "photoRowNumber", message: nil, preferredStyle: .alert)
-        alert.addTextField { (textfield) in
+        alert.addTextField { [weak self] (textfield) in
+            guard let self = self else { return }
             textfield.keyboardType = .numberPad
             textfield.text = String(self.config.photoList.rowNumber)
         }
-        alert.addAction(UIAlertAction.init(title: "确定", style: .default, handler: { (action) in
+        alert.addAction(UIAlertAction.init(title: "确定", style: .default, handler: { [weak self] (action) in
+            guard let self = self else { return }
             let textFiled = alert.textFields?.first
             self.config.photoList.rowNumber = Int(textFiled?.text ?? "0") ?? 0
             self.tableView.reloadRows(at: [indexPath], with: .fade)
@@ -441,7 +464,8 @@ extension PickerConfigurationViewController {
         let alert = UIAlertController.init(title: "videoPlayType", message: nil, preferredStyle: .alert)
         let titles = ["normal", "auto", "once"]
         for title in titles {
-            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { (action) in
+            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { [weak self] (action) in
+                guard let self = self else { return }
                 let index = titles.firstIndex(of: action.title!)!
                 self.config.previewView.videoPlayType = index == 0 ? .normal : index == 1 ? .auto : .once
                 self.tableView.reloadRows(at: [indexPath], with: .fade)
@@ -449,6 +473,10 @@ extension PickerConfigurationViewController {
         }
         alert.addAction(UIAlertAction.init(title: "取消", style: .cancel, handler: nil))
         present(alert, animated: true, completion: nil)
+    }
+    func addCameraAction(_ indexPath: IndexPath) {
+        config.photoList.allowAddCamera = !config.photoList.allowAddCamera
+        tableView.reloadRows(at: [indexPath], with: .fade)
     }
     func getRowContent(_ rowType: ConfigRowTypeRule) -> String {
         if let rowType = rowType as? ConfigRowType {
@@ -491,10 +519,12 @@ extension PickerConfigurationViewController {
                 return String(config.photoList.rowNumber)
             case .videoPlayType:
                 return config.previewView.videoPlayType.title
+            case .addCamera:
+                return config.photoList.allowAddCamera ? "true" : "false"
             }
         }
         if rowType is ViewControllerOptionsRowType {
-            return presentStyle == .fullScreen ? "true" : "false"
+            return config.modalPresentationStyle == .fullScreen ? "true" : "false"
         }
         return ""
     }
@@ -611,6 +641,7 @@ extension PickerConfigurationViewController {
         case maximumSelectedVideoDuration
         case minimumSelectedVideoDuration
         case videoPlayType
+        case addCamera
         
         var title: String {
             switch self {
@@ -652,6 +683,8 @@ extension PickerConfigurationViewController {
                 return "每行显示数量"
             case .videoPlayType:
                 return "视频播放类型"
+            case .addCamera:
+                return "列表添加相机"
             }
         }
         var detailTitle: String {
@@ -660,6 +693,9 @@ extension PickerConfigurationViewController {
             }
             if self == .videoPlayType {
                 return ".previewView.videoPlayType"
+            }
+            if self == .addCamera {
+                return ".PhotoList.allowAddCamera"
             }
             return "." + self.rawValue
         }
@@ -708,6 +744,8 @@ extension PickerConfigurationViewController {
                 return controller.photoRowNumberAction(_:)
             case .videoPlayType:
                 return controller.videoPlayTypeAction(_:)
+            case .addCamera:
+                return controller.addCameraAction(_:)
             }
         }
     }
@@ -732,6 +770,14 @@ extension LanguageType {
             return "泰语"
         case .indonesia:
             return "印尼语"
+        case .vietnamese:
+            return "越南语"
+        case .russian:
+            return "俄语"
+        case .german:
+            return "德语"
+        case .french:
+            return "法语"
         }
     }
 }

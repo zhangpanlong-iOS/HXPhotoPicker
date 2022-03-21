@@ -12,7 +12,7 @@ open class PhotoPickerView: UIView {
     public let manager: PickerManager
     
     /// 已选数组
-    /// 需要reload
+    /// 赋值之后需要 collectionView.reloadData()
     public var selectedAssets: [PhotoAsset] {
         get {
             manager.selectedAssetArray
@@ -22,7 +22,7 @@ open class PhotoPickerView: UIView {
         }
     }
     
-    /// 是否原图，预览界面是的选中原图按钮
+    /// 是否原图，预览界面时选中原图按钮
     public var isOriginal: Bool = false
     
     /// 启用拖动手势
@@ -77,6 +77,11 @@ open class PhotoPickerView: UIView {
         }
     }
     
+    /// 初始化选择视图
+    /// - Parameters:
+    ///   - manager: 管理数据
+    ///   - scrollDirection: 布局方向
+    ///   - delegate: 代理
     public init(
         manager: PickerManager,
         scrollDirection: UICollectionView.ScrollDirection = .vertical,
@@ -98,6 +103,8 @@ open class PhotoPickerView: UIView {
         self.delegate = delegate
         setup()
     }
+    
+    /// 内容视图
     public lazy var collectionView: UICollectionView = {
         let collectionView = UICollectionView(
             frame: bounds,
@@ -146,6 +153,13 @@ open class PhotoPickerView: UIView {
                     NSStringFromClass(PickerCamerViewCell.classForCoder())
             )
         }
+        if config.allowAddLimit && AssetManager.authorizationStatusIsLimited() {
+            collectionView.register(
+                PhotoPickerLimitCell.self,
+                forCellWithReuseIdentifier:
+                    NSStringFromClass(PhotoPickerLimitCell.classForCoder())
+            )
+        }
         if #available(iOS 11.0, *) {
             collectionView.contentInsetAdjustmentBehavior = .never
         }
@@ -182,7 +196,30 @@ open class PhotoPickerView: UIView {
         ) as! PickerCamerViewCell
         return cell
     }
-    
+    var limitAddCell: PhotoPickerLimitCell {
+        let indexPath: IndexPath
+        if config.sort == .asc {
+            if canAddCamera {
+                indexPath = IndexPath(item: assets.count - 1, section: 0)
+            }else {
+                indexPath = IndexPath(item: assets.count, section: 0)
+            }
+        }else {
+            if canAddCamera {
+                indexPath = IndexPath(item: 1, section: 0)
+            }else {
+                indexPath = IndexPath(item: 0, section: 0)
+            }
+        }
+        let cell = collectionView.dequeueReusableCell(
+            withReuseIdentifier: NSStringFromClass(
+                PhotoPickerLimitCell.classForCoder()
+            ),
+            for: indexPath
+        ) as! PhotoPickerLimitCell
+        cell.config = config.limitCell
+        return cell
+    }
     lazy var emptyView: EmptyView = {
         let emptyView = EmptyView(frame: .zero)
         emptyView.config = config.emptyView
@@ -211,12 +248,39 @@ open class PhotoPickerView: UIView {
     }()
     var dragTempCell: PhotoPickerBaseViewCell?
     var initialDragRect: CGRect = .zero
-    var needOffset: Bool {
-        config.sort == .desc &&
-            config.allowAddCamera &&
-            canAddCamera
+    var didFetchAsset: Bool = false
+    var canAddCamera: Bool {
+        if didFetchAsset && config.allowAddCamera {
+            return true
+        }
+        return false
     }
-    var canAddCamera: Bool = false
+    var canAddLimit: Bool {
+        if didFetchAsset && config.allowAddLimit && AssetManager.authorizationStatusIsLimited() {
+            return true
+        }
+        return false
+    }
+    var needOffset: Bool {
+        if config.sort == .desc {
+            if canAddCamera || canAddLimit {
+                return true
+            }
+        }
+        return false
+    }
+    var offsetIndex: Int {
+        if !needOffset {
+            return 0
+        }
+        if canAddCamera && canAddLimit {
+            return 2
+        }else if canAddCamera {
+            return 1
+        }else {
+            return 1
+        }
+    }
     var allowPreview: Bool = true
     var orientationDidChange: Bool = false
     var beforeOrientationIndexPath: IndexPath?

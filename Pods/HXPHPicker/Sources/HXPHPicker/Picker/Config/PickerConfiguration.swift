@@ -77,6 +77,9 @@ public class PickerConfiguration: BaseConfiguration {
     
     /// 照片编辑配置
     public lazy var photoEditor: PhotoEditorConfiguration = .init()
+    
+    /// 跳转编辑界面自定义转场动画
+    public var editorCustomTransition: Bool = true
     #endif
     
     /// 状态栏样式
@@ -97,6 +100,8 @@ public class PickerConfiguration: BaseConfiguration {
     /// 暗黑风格下导航栏样式
     public var navigationBarDarkStyle: UIBarStyle = .black
     
+    public var adaptiveBarAppearance: Bool = true
+    
     /// 导航栏标题颜色
     public var navigationTitleColor: UIColor = .black
     
@@ -107,7 +112,7 @@ public class PickerConfiguration: BaseConfiguration {
     public var navigationTintColor: UIColor?
     
     /// 暗黑风格下TintColor
-    public var navigationDarkTintColor: UIColor = .white
+    public var navigationDarkTintColor: UIColor?
     
     /// 相册列表配置
     public lazy var albumList: AlbumListConfiguration = .init()
@@ -120,4 +125,12 @@ public class PickerConfiguration: BaseConfiguration {
     
     /// 未授权提示界面相关配置
     public lazy var notAuthorized: NotAuthorizedConfiguration = .init()
+    
+    /// 是否缓存[相机胶卷/所有照片]相册
+    public var isCacheCameraAlbum: Bool = true
+    
+    public override init() {
+        super.init()
+        PhotoManager.shared.isCacheCameraAlbum = isCacheCameraAlbum
+    }
 }

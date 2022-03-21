@@ -22,6 +22,9 @@ public struct PhotoListCellConfiguration {
     /// 继承 PhotoPickerSelectableViewCell 加以修改
     public var customSelectableCellClass: PhotoPickerBaseViewCell.Type?
     
+    /// 如果资产在iCloud上，是否显示iCloud标示
+    public var showICloudMark: Bool = true
+    
     /// 背景颜色
     public var backgroundColor: UIColor?
     
@@ -44,6 +47,10 @@ public struct PhotoListCellConfiguration {
     
     /// 选择框相关配置
     public var selectBox: SelectBoxConfiguration = .init()
+    
+    #if canImport(Kingfisher)
+    public var kf_indicatorColor: UIColor?
+    #endif
     
     public init() { }
 }

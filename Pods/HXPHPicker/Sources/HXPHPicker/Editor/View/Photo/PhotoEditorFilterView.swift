@@ -111,36 +111,42 @@ class PhotoEditorFilterView: UIView {
         }
     }
     var currentSelectedIndex: Int
-    let filterConfig: PhotoEditorConfiguration.FilterConfig
-    init(filterConfig: PhotoEditorConfiguration.FilterConfig,
-         sourceIndex: Int,
-         value: Float) {
+    let filterConfig: PhotoEditorConfiguration.Filter
+    init(
+        filterConfig: PhotoEditorConfiguration.Filter,
+        hasLastFilter: Bool,
+        isVideo: Bool = false
+    ) {
         self.filterConfig = filterConfig
-        let originalFilter = PhotoEditorFilter.init(filterName: "原图".localized,
-                                                    defaultValue: -1)
+        let originalFilter = PhotoEditorFilter(
+            filterName: isVideo ? "原片".localized : "原图".localized,
+            defaultValue: -1
+        )
         originalFilter.isOriginal = true
         originalFilter.isSelected = true
         filters.append(originalFilter)
         currentSelectedIndex = 0
         super.init(frame: .zero)
-        if sourceIndex >= filterConfig.infos.count {
+        if hasLastFilter {
             originalFilter.isSelected = false
             currentSelectedIndex = -1
         }
-        for (index, filterInfo) in filterConfig.infos.enumerated() {
-            let filter = PhotoEditorFilter.init(filterName: filterInfo.filterName,
-                                                defaultValue: filterInfo.defaultValue)
-            if sourceIndex == index {
-                originalFilter.isSelected = false
-                filter.isSelected = true
-                currentSelectedIndex = index + 1
-                if filterInfo.defaultValue == -1 {
-                    sliderView.isHidden = true
-                }else {
-                    sliderView.isHidden = false
-                    sliderView.value = value
-                }
-            }
+        for filterInfo in filterConfig.infos {
+            let filter = PhotoEditorFilter(
+                filterName: filterInfo.filterName,
+                defaultValue: filterInfo.defaultValue
+            )
+//            if sourceIndex == index {
+//                originalFilter.isSelected = false
+//                filter.isSelected = true
+//                currentSelectedIndex = index + 1
+//                if filterInfo.defaultValue == -1 {
+//                    sliderView.isHidden = true
+//                }else {
+//                    sliderView.isHidden = false
+//                    sliderView.value = value
+//                }
+//            }
             filters.append(filter)
         }
         addSubview(backgroundView)
@@ -215,9 +221,11 @@ extension PhotoEditorFilterView: UICollectionViewDataSource, UICollectionViewDel
         if currentSelectedIndex == indexPath.item {
             return
         }
-        let currentFilter = filters[currentSelectedIndex]
-        currentFilter.sourceIndex = 0
-        currentFilter.isSelected = false
+        if currentSelectedIndex >= 0 {
+            let currentFilter = filters[currentSelectedIndex]
+            currentFilter.sourceIndex = 0
+            currentFilter.isSelected = false
+        }
         if let currentCell = collectionView.cellForItem(
             at: IndexPath(
                 item: currentSelectedIndex,
@@ -246,13 +254,13 @@ extension PhotoEditorFilterView: UICollectionViewDataSource, UICollectionViewDel
 
 extension PhotoEditorFilterView: PhotoEditorFilterViewCellDelegate {
     func filterViewCell(fetchFilter cell: PhotoEditorFilterViewCell) -> UIImage? {
-        if let image = image,
+        if let image = image?.ci_Image,
            let index = filters.firstIndex(of: cell.filter) {
             let filterInfo = filterConfig.infos[index - 1]
             return filterInfo.filterHandler(image,
                                             cell.imageView.image,
                                             filterInfo.defaultValue,
-                                            .touchUpInside)
+                                            .touchUpInside)?.image
         }
         return nil
     }

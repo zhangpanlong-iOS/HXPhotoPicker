@@ -34,7 +34,7 @@ CLLocationManagerDelegate
 @property (strong, nonatomic) UIButton *changeCameraBtn;
 @property (strong, nonatomic) HXCameraBottomView *bottomView;
 @property (strong, nonatomic) NSTimer *timer;
-@property (assign, nonatomic) NSDate *dateVideoStarted;
+@property (strong, nonatomic) NSDate *dateVideoStarted;
 @property (strong, nonatomic) UIImageView *imageView;
 @property (strong, nonatomic) HXCustomCameraPlayVideoView *playVideoView;
 @property (strong, nonatomic) UIButton *doneBtn;
@@ -164,7 +164,18 @@ CLLocationManagerDelegate
     }
     self.customNavigationBar.translucent = YES;
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(applicationBecomeActive) name:UIApplicationWillEnterForegroundNotification object:nil];
-
+    
+    if (@available(iOS 13.0, *)) {
+        UINavigationBarAppearance *appearance = [[UINavigationBarAppearance alloc] init];
+        appearance.shadowImage = [[UIImage alloc] init];
+        appearance.shadowColor = [UIColor clearColor];
+        appearance.titleTextAttributes = self.customNavigationBar.titleTextAttributes;
+        appearance.backgroundEffect = nil;
+        self.customNavigationBar.standardAppearance = appearance;
+        if (@available(iOS 15.0, *)) {
+            self.customNavigationBar.scrollEdgeAppearance = appearance;
+        }
+    }
 }
 - (void)applicationBecomeActive {
     if (self.addAudioInputComplete) {
@@ -573,7 +584,6 @@ CLLocationManagerDelegate
     [self.view hx_showImageHUDText:[NSBundle hx_localizedStringForKey:@"拍摄失败"]];
 }
 - (void)startTimer {
-    self.dateVideoStarted = [NSDate date];
 //    [self.timer invalidate];
 //    self.timer = [NSTimer timerWithTimeInterval:0.2f
 //                                         target:self
@@ -607,6 +617,9 @@ CLLocationManagerDelegate
 }
 - (void)videoFinishRecording:(NSURL *)videoURL {
     [self.bottomView stopRecord];
+    if (!self.dateVideoStarted) {
+        self.dateVideoStarted = [NSDate date];
+    }
     NSTimeInterval timeElapsed = [[NSDate date] timeIntervalSinceDate:self.dateVideoStarted];
     if (timeElapsed < self.manager.configuration.videoMinimumDuration) {
         self.bottomView.hidden = NO;
@@ -669,11 +682,12 @@ CLLocationManagerDelegate
 }
 - (void)playViewAnimateCompletion {
     if (self.bottomView.inTranscribe) {
-        dispatch_async(dispatch_queue_create("com.hxdatephotopicker.kamera", NULL), ^{
+        dispatch_async(dispatch_queue_create("com.hxdatephotopicker.camera", NULL), ^{
             [self.cameraController startRecording];
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [self startTimer];
-            });
+            self.dateVideoStarted = [NSDate date];
+//            dispatch_async(dispatch_get_main_queue(), ^{
+//                [self startTimer];
+//            });
         });
     }
 }
@@ -688,6 +702,7 @@ CLLocationManagerDelegate
     if (!_customNavigationBar) {
         _customNavigationBar = [[UINavigationBar alloc] init];
         _customNavigationBar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+        _customNavigationBar.shadowImage = [[UIImage alloc] init];
         [_customNavigationBar pushNavigationItem:self.navItem animated:NO];
     }
     return _customNavigationBar;

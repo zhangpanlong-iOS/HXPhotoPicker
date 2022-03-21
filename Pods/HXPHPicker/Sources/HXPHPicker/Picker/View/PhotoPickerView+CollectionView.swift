@@ -6,39 +6,61 @@
 //
 
 import UIKit
+import Photos
+import PhotosUI
 
 extension PhotoPickerView: UICollectionViewDataSource {
     public func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        config.allowAddCamera &&
-            canAddCamera ? assets.count + 1 : assets.count
+        if canAddCamera && canAddLimit {
+            return assets.count + 2
+        }else if canAddCamera || canAddLimit {
+            return assets.count + 1
+        }
+        return assets.count
     }
-    
+    func getAdditiveCell(_ indexPath: IndexPath) -> UICollectionViewCell? {
+        if canAddCamera && canAddLimit {
+            if config.sort == .asc {
+                if indexPath.item == assets.count + 1 {
+                    return cameraCell
+                }
+                if indexPath.item == assets.count {
+                    return limitAddCell
+                }
+            }else {
+                if indexPath.item == 0 {
+                    return cameraCell
+                }
+                if indexPath.item == 1 {
+                    return limitAddCell
+                }
+            }
+        }else if canAddCamera || canAddLimit {
+            if config.sort == .asc {
+                if indexPath.item == assets.count {
+                    return canAddCamera ? cameraCell : limitAddCell
+                }
+            }else {
+                if indexPath.item == 0 {
+                    return canAddCamera ? cameraCell : limitAddCell
+                }
+            }
+        }
+        return nil
+    }
     public func collectionView(
         _ collectionView: UICollectionView,
         cellForItemAt indexPath: IndexPath
     ) -> UICollectionViewCell {
-        if config.allowAddCamera && canAddCamera {
-            if config.sort == .asc {
-                if indexPath.item == assets.count {
-                    let cell = cameraCell
-                    cell.allowPreview = allowPreview
-                    cell.config = config.cameraCell
-                    if !allowPreview {
-                        cell.stopSession()
-                    }
-                    return cell
-                }
-            }else {
-                if indexPath.item == 0 {
-                    let cell = cameraCell
-                    cell.allowPreview = allowPreview
-                    cell.config = config.cameraCell
-                    if !allowPreview {
-                        cell.stopSession()
-                    }
-                    return cell
+        if let cell = getAdditiveCell(indexPath) {
+            if let cell = cell as? PickerCamerViewCell {
+                cell.allowPreview = allowPreview
+                cell.config = config.cameraCell
+                if !allowPreview {
+                    cell.stopSession()
                 }
             }
+            return cell
         }
         let cell: PhotoPickerBaseViewCell
         let photoAsset = getPhotoAsset(for: indexPath.item)
@@ -141,14 +163,6 @@ extension PhotoPickerView: UICollectionViewDelegate {
     }
     public func collectionView(
         _ collectionView: UICollectionView,
-        didEndDisplaying cell: UICollectionViewCell,
-        forItemAt indexPath: IndexPath
-    ) {
-        let myCell = cell as? PhotoPickerBaseViewCell
-        myCell?.cancelRequest()
-    }
-    public func collectionView(
-        _ collectionView: UICollectionView,
         didSelectItemAt indexPath: IndexPath
     ) {
         didSelectItem(
@@ -178,16 +192,29 @@ extension PhotoPickerView: UICollectionViewDelegate {
                 if granted {
                     self.presentCameraViewController()
                 }else {
-                    PhotoTools.showNotCameraAuthorizedAlert(viewController: self.viewController())
+                    PhotoTools.showNotCameraAuthorizedAlert(viewController: self.viewController)
                 }
             }
-        }else if cell is PhotoPickerBaseViewCell {
-            let myCell = cell as! PhotoPickerBaseViewCell
+        }else if cell is PhotoPickerLimitCell {
+            guard let vc = UIViewController.topViewController else {
+                return
+            }
+            if #available(iOS 14, *) {
+                PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: vc)
+            }
+        }else if let myCell = cell as? PhotoPickerBaseViewCell,
+                 let photoAsset = myCell.photoAsset {
             if !myCell.canSelect {
                 return
             }
-            let item = needOffset ? indexPath.item - 1 : indexPath.item
-            let photoAsset = myCell.photoAsset!
+            if let pickerCell = myCell as? PhotoPickerViewCell,
+               pickerCell.inICloud {
+                photoAsset.syncICloud { [weak self] photoAsset, _ in
+                    self?.resetICloud(for: photoAsset)
+                }
+                return
+            }
+            let item = needOffset ? indexPath.item - offsetIndex : indexPath.item
             var selectionTapAction: SelectionTapAction
             if photoAsset.mediaType == .photo {
                 selectionTapAction = manager.config.photoSelectionTapAction
@@ -260,7 +287,7 @@ extension PhotoPickerView: UICollectionViewDelegate {
                 config: config,
                 delegate: self
             )
-            viewController()?.present(photoEditorVC, animated: animated)
+            viewController?.present(photoEditorVC, animated: animated)
             return true
         }
         #endif
@@ -281,8 +308,8 @@ extension PhotoPickerView: UICollectionViewDelegate {
             let config: VideoEditorConfiguration
             if isExceedsTheLimit {
                 config = manager.config.videoEditor.mutableCopy() as! VideoEditorConfiguration
-                config.defaultState = .cropping
-                config.cropping.maximumVideoCroppingTime = TimeInterval(
+                config.defaultState = .cropTime
+                config.cropTime.maximumVideoCroppingTime = TimeInterval(
                     manager.config.maximumSelectedVideoDuration
                 )
                 config.mustBeTailored = true
@@ -300,7 +327,7 @@ extension PhotoPickerView: UICollectionViewDelegate {
                 delegate: self
             )
             videoEditorVC.videoEditor?.coverImage = coverImage
-            viewController()?.present(videoEditorVC, animated: animated)
+            viewController?.present(videoEditorVC, animated: animated)
             return true
         }
         #endif
@@ -340,6 +367,7 @@ extension PhotoPickerView: UICollectionViewDelegate {
                 width = max(120, width)
                 height = max(120, height)
                 let vc = PhotoPeekViewController(photoAsset)
+                vc.delegate = self
                 vc.preferredContentSize = CGSize(width: width, height: height)
                 return vc
             }else if sCell is PickerCamerViewCell &&
@@ -446,7 +474,17 @@ extension PhotoPickerView: UICollectionViewDelegateFlowLayout {
         }
         let maxHeight = height - contentInset.top - contentInset.bottom
         let minWidth = maxHeight / 16 * 9
-        if config.allowAddCamera && canAddCamera {
+        if canAddCamera && canAddLimit {
+            if config.sort == .asc {
+                if indexPath.item == assets.count + 1 || indexPath.item == assets.count {
+                    return CGSize(width: minWidth, height: maxHeight)
+                }
+            }else {
+                if indexPath.item == 0 || indexPath.item == 1 {
+                    return CGSize(width: minWidth, height: maxHeight)
+                }
+            }
+        }else if canAddCamera || canAddLimit {
             if config.sort == .asc {
                 if indexPath.item == assets.count {
                     return CGSize(width: minWidth, height: maxHeight)
@@ -457,7 +495,7 @@ extension PhotoPickerView: UICollectionViewDelegateFlowLayout {
                 }
             }
         }
-        let maxWidth = maxHeight / 9 * 14
+        let maxWidth = min(width - 60, maxHeight / 9 * 14)
         let photoAsset = getPhotoAsset(for: indexPath.item)
         let assetSize = photoAsset.imageSize
         let aspectRatio = assetSize.width / assetSize.height
@@ -470,5 +508,16 @@ extension PhotoPickerView: UICollectionViewDelegateFlowLayout {
             itemWidth = min(itemWidth, maxWidth)
         }
         return CGSize(width: itemWidth, height: itemHeight)
+    }
+}
+
+extension PhotoPickerView: PhotoPeekViewControllerDelegate {
+    public func photoPeekViewController(
+        requestSucceed photoPeekViewController: PhotoPeekViewController
+    ) {
+        guard let photoAsset = photoPeekViewController.photoAsset else {
+            return
+        }
+        resetICloud(for: photoAsset)
     }
 }

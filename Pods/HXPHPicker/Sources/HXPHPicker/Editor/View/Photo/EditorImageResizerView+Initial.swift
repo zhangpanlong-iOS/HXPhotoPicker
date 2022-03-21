@@ -55,7 +55,11 @@ extension EditorImageResizerView {
     }
     func setImage(_ image: UIImage) {
         updateContentInsets()
-        imageScale = image.width / image.height
+        if image.size.equalTo(.zero) {
+            imageScale = 1
+        }else {
+            imageScale = image.width / image.height
+        }
         imageView.setImage(image)
         configAspectRatio()
         updateScrollView()
@@ -68,6 +72,10 @@ extension EditorImageResizerView {
             height: containerView.height - contentInsets.top - contentInsets.bottom
         )
         controlView.maxImageresizerFrame = maxControlRect
+    }
+    func setAVAsset(_ asset: AVAsset, coverImage: UIImage) {
+        setImage(coverImage)
+        imageView.videoView.avAsset = asset
     }
     /// 更新图片
     func updateImage(_ image: UIImage) {
@@ -222,20 +230,21 @@ extension EditorImageResizerView {
             scrollView.contentInset = UIEdgeInsets(top: top, left: left, bottom: top, right: left)
         }
     }
+    
     /// 更新边距
-    func updateContentInsets() {
+    func updateContentInsets(_ isCropTime: Bool = false) {
         if UIDevice.isPortrait {
             contentInsets = UIEdgeInsets(
-                top: 20 + UIDevice.generalStatusBarHeight,
+                top: isCropTime ? 10 + UIDevice.topMargin : 20 + UIDevice.generalStatusBarHeight,
                 left: 30 + UIDevice.leftMargin,
-                bottom: 125 + UIDevice.bottomMargin,
+                bottom: isCropTime ? 155 + UIDevice.bottomMargin : 125 + UIDevice.bottomMargin,
                 right: 30 + UIDevice.rightMargin
             )
         }else {
             contentInsets = UIEdgeInsets(
-                top: 20 ,
+                top: isCropTime ? 10 + UIDevice.topMargin : 20,
                 left: 30 + UIDevice.leftMargin,
-                bottom: 125 + UIDevice.bottomMargin,
+                bottom: isCropTime ? 160 + UIDevice.bottomMargin : 125 + UIDevice.bottomMargin,
                 right: 30 + UIDevice.rightMargin
             )
         }
@@ -262,7 +271,9 @@ extension EditorImageResizerView {
         scrollView.frame = containerView.bounds
     }
     
-    func getEditedData() -> PhotoEditData {
+    func getEditedData(
+        _ filterImageURL: URL?
+    ) -> PhotoEditData {
         let brushData = imageView.drawView.getBrushData()
         let rect = maskBgView.convert(controlView.frame, to: imageView)
         
@@ -271,6 +282,7 @@ extension EditorImageResizerView {
         if canReset() {
             cropData = .init(
                 cropSize: cropSize,
+                isRoundCrop: layer.cornerRadius > 0 ? cropConfig.isRoundCrop : false,
                 zoomScale: oldZoomScale,
                 contentInset: oldContentInset,
                 offsetScale: offsetScale,
@@ -288,11 +300,42 @@ extension EditorImageResizerView {
             isPortrait: UIDevice.isPortrait,
             cropData: cropData,
             brushData: brushData,
-            filter: filter,
-            filterValue: filterValue,
+            hasFilter: hasFilter,
+            filterImageURL: filterImageURL,
             mosaicData: mosaicData,
             stickerData: stickerData
         )
         return editedData
+    }
+    
+    func getVideoEditedData() -> VideoEditedCropSize {
+        let brushData = imageView.drawView.getBrushData()
+        let rect = maskBgView.convert(controlView.frame, to: imageView)
+        
+        let offsetScale = CGPoint(x: rect.minX / baseImageSize.width, y: rect.minY / baseImageSize.height)
+        var cropData: PhotoEditCropData?
+        if canReset() {
+            cropData = .init(
+                cropSize: cropSize,
+                isRoundCrop: layer.cornerRadius > 0 ? cropConfig.isRoundCrop : false,
+                zoomScale: oldZoomScale,
+                contentInset: oldContentInset,
+                offsetScale: offsetScale,
+                minimumZoomScale: oldMinimumZoomScale,
+                maximumZoomScale: oldMaximumZoomScale,
+                maskRect: oldMaskRect,
+                angle: oldAngle,
+                transform: oldTransform,
+                mirrorType: oldMirrorType
+            )
+        }
+        let stickerData = imageView.stickerView.stickerData()
+        return .init(
+            isPortrait: UIDevice.isPortrait,
+            cropData: cropData,
+            brushData: brushData,
+            stickerData: stickerData,
+            filter: videoFilter
+        )
     }
 }

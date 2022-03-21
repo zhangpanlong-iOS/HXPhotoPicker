@@ -43,9 +43,25 @@ class EditorConfigurationViewController: UITableViewController {
                             ofType: ".JPG"
                         )!
                     )!
-                    let vc = EditorController.init(image: image, config: photoConfig)
-                    vc.photoEditorDelegate = self
-                    present(vc, animated: true, completion: nil)
+                    Photo.edit(
+                        photo: image,
+                        config: photoConfig
+                    ) { [weak self] controller, result in
+                        guard let self = self else { return }
+                        let pickerResultVC = PickerResultViewController()
+                        let pickerConfig = PickerConfiguration()
+                        pickerConfig.photoEditor = self.photoConfig
+                        pickerResultVC.config = pickerConfig
+                        let localImageAsset = LocalImageAsset.init(image: controller.image)
+                        let photoAsset = PhotoAsset(localImageAsset: localImageAsset)
+                        photoAsset.photoEdit = result
+                        pickerResultVC.selectedAssets = [photoAsset]
+                        self.navigationController?.pushViewController(pickerResultVC, animated: true)
+                    }
+
+//                    let vc = EditorController.init(image: image, config: photoConfig)
+//                    vc.photoEditorDelegate = self
+//                    present(vc, animated: true, completion: nil)
                 }else {
                     #if canImport(Kingfisher)
                     let networkURL = URL(
@@ -202,57 +218,49 @@ extension EditorConfigurationViewController: VideoEditorViewControllerDelegate {
         let lyricUrl1 = Bundle.main.url(forResource: "天外来物", withExtension: nil)!
         let lrc1 = try! String(contentsOfFile: lyricUrl1.path) // swiftlint:disable:this force_try
         let music1 = VideoEditorMusicInfo.init(audioURL: URL(string: "http://tsnrhapp.oss-cn-hangzhou.aliyuncs.com/chartle/%E5%A4%A9%E5%A4%96%E6%9D%A5%E7%89%A9.mp3")!, // swiftlint:disable:this line_length
-                                               lrc: lrc1,
-                                               urlType: .network)
+                                               lrc: lrc1)
         musics.append(music1)
         let audioUrl2 = Bundle.main.url(forResource: "嘉宾", withExtension: "mp3")!
         let lyricUrl2 = Bundle.main.url(forResource: "嘉宾", withExtension: nil)!
         let lrc2 = try! String(contentsOfFile: lyricUrl2.path) // swiftlint:disable:this force_try
         let music2 = VideoEditorMusicInfo.init(audioURL: audioUrl2,
-                                               lrc: lrc2,
-                                               urlType: .network)
+                                               lrc: lrc2)
         musics.append(music2)
         let audioUrl3 = Bundle.main.url(forResource: "少女的祈祷", withExtension: "mp3")!
         let lyricUrl3 = Bundle.main.url(forResource: "少女的祈祷", withExtension: nil)!
         let lrc3 = try! String(contentsOfFile: lyricUrl3.path) // swiftlint:disable:this force_try
         let music3 = VideoEditorMusicInfo.init(audioURL: audioUrl3,
-                                               lrc: lrc3,
-                                               urlType: .network)
+                                               lrc: lrc3)
         musics.append(music3)
         let audioUrl4 = Bundle.main.url(forResource: "野孩子", withExtension: "mp3")!
         let lyricUrl4 = Bundle.main.url(forResource: "野孩子", withExtension: nil)!
         let lrc4 = try! String(contentsOfFile: lyricUrl4.path) // swiftlint:disable:this force_try
         let music4 = VideoEditorMusicInfo.init(audioURL: audioUrl4,
-                                               lrc: lrc4,
-                                               urlType: .network)
+                                               lrc: lrc4)
         musics.append(music4)
         let audioUrl5 = Bundle.main.url(forResource: "无赖", withExtension: "mp3")!
         let lyricUrl5 = Bundle.main.url(forResource: "无赖", withExtension: nil)!
         let lrc5 = try! String(contentsOfFile: lyricUrl5.path) // swiftlint:disable:this force_try
         let music5 = VideoEditorMusicInfo.init(audioURL: audioUrl5,
-                                               lrc: lrc5,
-                                               urlType: .network)
+                                               lrc: lrc5)
         musics.append(music5)
         let audioUrl6 = Bundle.main.url(forResource: "时光正好", withExtension: "mp3")!
         let lyricUrl6 = Bundle.main.url(forResource: "时光正好", withExtension: nil)!
         let lrc6 = try! String(contentsOfFile: lyricUrl6.path) // swiftlint:disable:this force_try
         let music6 = VideoEditorMusicInfo.init(audioURL: audioUrl6,
-                                               lrc: lrc6,
-                                               urlType: .network)
+                                               lrc: lrc6)
         musics.append(music6)
         let audioUrl7 = Bundle.main.url(forResource: "世间美好与你环环相扣", withExtension: "mp3")!
         let lyricUrl7 = Bundle.main.url(forResource: "世间美好与你环环相扣", withExtension: nil)!
         let lrc7 = try! String(contentsOfFile: lyricUrl7.path) // swiftlint:disable:this force_try
         let music7 = VideoEditorMusicInfo.init(audioURL: audioUrl7,
-                                               lrc: lrc7,
-                                               urlType: .network)
+                                               lrc: lrc7)
         musics.append(music7)
         let audioUrl8 = Bundle.main.url(forResource: "爱你", withExtension: "mp3")!
         let lyricUrl8 = Bundle.main.url(forResource: "爱你", withExtension: nil)!
         let lrc8 = try! String(contentsOfFile: lyricUrl8.path) // swiftlint:disable:this force_try
         let music8 = VideoEditorMusicInfo.init(audioURL: audioUrl8,
-                                               lrc: lrc8,
-                                               urlType: .network)
+                                               lrc: lrc8)
         musics.append(music8)
         return musics
     }
@@ -390,9 +398,9 @@ extension EditorConfigurationViewController {
             case .mustBeTailored:
                 return videoConfig.mustBeTailored ? "true" : "false"
             case .maximumVideoCroppingTime:
-                return String(Int(videoConfig.cropping.maximumVideoCroppingTime))
+                return String(Int(videoConfig.cropTime.maximumVideoCroppingTime))
             case .minimumVideoCroppingTime:
-                return String(Int(videoConfig.cropping.minimumVideoCroppingTime))
+                return String(Int(videoConfig.cropTime.minimumVideoCroppingTime))
             }
         }
         return ""
@@ -409,7 +417,8 @@ extension EditorConfigurationViewController {
         let alert = UIAlertController.init(title: "state", message: nil, preferredStyle: .alert)
         let titles = ["normal", "cropping"]
         for title in titles {
-            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { (action) in
+            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { [weak self] (action) in
+                guard let self = self else { return }
                 let index = titles.firstIndex(of: action.title!)!
                 switch index {
                 case 0:
@@ -451,7 +460,8 @@ extension EditorConfigurationViewController {
             UIAlertAction(
                 title: "确定",
                 style: .default,
-                handler: { (action) in
+                handler: { [weak self] (action) in
+                    guard let self = self else { return }
             let widthTextFiled = alert.textFields?.first
             let widthRatioStr = widthTextFiled?.text ?? "0"
             let widthRatio = Int(widthRatioStr.count == 0 ? "0" : widthRatioStr)!
@@ -468,7 +478,8 @@ extension EditorConfigurationViewController {
         let alert = UIAlertController.init(title: "maskTypeAction", message: nil, preferredStyle: .alert)
         let titles = ["blackColor", "darkBlurEffect", "lightBlurEffect"]
         for title in titles {
-            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { (action) in
+            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { [weak self] (action) in
+                guard let self = self else { return }
                 let index = titles.firstIndex(of: action.title!)!
                 switch index {
                 case 0:
@@ -490,7 +501,8 @@ extension EditorConfigurationViewController {
         let alert = UIAlertController.init(title: "exportPresetNameAction", message: nil, preferredStyle: .alert)
         let titles = ["lowQuality", "mediumQuality", "highestQuality"]
         for title in titles {
-            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { (action) in
+            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { [weak self] (action) in
+                guard let self = self else { return }
                 let index = titles.firstIndex(of: action.title!)!
                 switch index {
                 case 0:
@@ -512,13 +524,14 @@ extension EditorConfigurationViewController {
         let alert = UIAlertController.init(title: "defaultState", message: nil, preferredStyle: .alert)
         let titles = ["normal", "cropping"]
         for title in titles {
-            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { (action) in
+            alert.addAction(UIAlertAction.init(title: title, style: .default, handler: { [weak self] (action) in
+                guard let self = self else { return }
                 let index = titles.firstIndex(of: action.title!)!
                 switch index {
                 case 0:
                     self.videoConfig.defaultState = .normal
                 case 1:
-                    self.videoConfig.defaultState = .cropping
+                    self.videoConfig.defaultState = .cropTime
                 default:
                     break
                 }
@@ -534,7 +547,7 @@ extension EditorConfigurationViewController {
     }
     func maximumVideoCroppingTimeAction(_ indexPath: IndexPath) {
         let alert = UIAlertController.init(title: "maximumVideoCroppingTime", message: nil, preferredStyle: .alert)
-        let maximumVideoCroppingTime: Int = Int(videoConfig.cropping.maximumVideoCroppingTime)
+        let maximumVideoCroppingTime: Int = Int(videoConfig.cropTime.maximumVideoCroppingTime)
         alert.addTextField { (textfield) in
             textfield.keyboardType = .numberPad
             textfield.text = String(maximumVideoCroppingTime)
@@ -543,10 +556,11 @@ extension EditorConfigurationViewController {
             UIAlertAction(
                 title: "确定",
                 style: .default,
-                handler: { (action) in
+                handler: { [weak self] (action) in
+                    guard let self = self else { return }
             let textFiled = alert.textFields?.first
             let time = Int(textFiled?.text ?? "0")!
-            self.videoConfig.cropping.maximumVideoCroppingTime = TimeInterval(time)
+            self.videoConfig.cropTime.maximumVideoCroppingTime = TimeInterval(time)
             self.tableView.reloadRows(at: [indexPath], with: .fade)
         }))
         alert.addAction(UIAlertAction.init(title: "取消", style: .cancel, handler: nil))
@@ -554,7 +568,7 @@ extension EditorConfigurationViewController {
     }
     func minimumVideoCroppingTimeAction(_ indexPath: IndexPath) {
         let alert = UIAlertController.init(title: "maximumVideoCroppingTime", message: nil, preferredStyle: .alert)
-        let minimumVideoCroppingTime: Int = Int(videoConfig.cropping.minimumVideoCroppingTime)
+        let minimumVideoCroppingTime: Int = Int(videoConfig.cropTime.minimumVideoCroppingTime)
         alert.addTextField { (textfield) in
             textfield.keyboardType = .numberPad
             textfield.text = String(minimumVideoCroppingTime)
@@ -563,10 +577,11 @@ extension EditorConfigurationViewController {
             UIAlertAction(
                 title: "确定",
                 style: .default,
-                handler: { (action) in
+                handler: { [weak self] (action) in
+                    guard let self = self else { return }
             let textFiled = alert.textFields?.first
             let time = Int(textFiled?.text ?? "0")!
-            self.videoConfig.cropping.minimumVideoCroppingTime = TimeInterval(time)
+            self.videoConfig.cropTime.minimumVideoCroppingTime = TimeInterval(time)
             self.tableView.reloadRows(at: [indexPath], with: .fade)
         }))
         alert.addAction(UIAlertAction.init(title: "取消", style: .cancel, handler: nil))
@@ -738,7 +753,7 @@ extension EditorConfigurationViewController {
 
 extension VideoEditorViewController.State {
     var title: String {
-        if self == .cropping {
+        if self == .cropTime {
             return "裁剪"
         }
         return "正常"

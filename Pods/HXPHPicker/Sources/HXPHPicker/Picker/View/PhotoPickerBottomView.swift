@@ -25,10 +25,64 @@ extension PhotoPickerBottomViewDelegate {
 }
 
 class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
-    
+    enum SourceType {
+        case picker
+        case preview
+        case browser
+    }
     weak var hx_delegate: PhotoPickerBottomViewDelegate?
     
-    var config: PickerBottomViewConfiguration
+    let config: PickerBottomViewConfiguration
+    let sourceType: SourceType
+    let allowLoadPhotoLibrary: Bool
+    let isMultipleSelect: Bool
+    
+    init(
+        config: PickerBottomViewConfiguration,
+        allowLoadPhotoLibrary: Bool,
+        isMultipleSelect: Bool,
+        sourceType: SourceType) {
+        self.sourceType = sourceType
+        self.allowLoadPhotoLibrary = allowLoadPhotoLibrary
+        self.config = config
+        self.isMultipleSelect = isMultipleSelect
+        super.init(frame: CGRect.zero)
+        layoutSubviews()
+        if config.showPrompt &&
+            AssetManager.authorizationStatusIsLimited() &&
+            allowLoadPhotoLibrary &&
+            sourceType == .picker {
+            addSubview(promptView)
+        }
+        if sourceType == .browser {
+            if config.showSelectedView {
+                addSubview(selectedView)
+            }
+            #if HXPICKER_ENABLE_EDITOR
+            if !config.editButtonHidden {
+                addSubview(editBtn)
+            }
+            #endif
+        }else {
+            addSubview(contentView)
+            if config.showSelectedView && isMultipleSelect {
+                addSubview(selectedView)
+            }
+        }
+        configColor()
+        isTranslucent = config.isTranslucent
+    }
+    
+    convenience init(
+        config: PickerBottomViewConfiguration,
+        allowLoadPhotoLibrary: Bool) {
+        self.init(
+            config: config,
+            allowLoadPhotoLibrary: allowLoadPhotoLibrary,
+            isMultipleSelect: true,
+            sourceType: .picker
+        )
+    }
     
     lazy var selectedView: PhotoPreviewSelectedView = {
         let selectedView = PhotoPreviewSelectedView.init(frame: CGRect(x: 0, y: 0, width: width, height: 70))
@@ -158,7 +212,7 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
             // 选中
             requestAssetBytes()
         }
-        viewController()?.pickerController?.isOriginal = boxControl.isSelected
+        viewController?.pickerController?.isOriginal = boxControl.isSelected
         hx_delegate?.bottomView(self, didOriginalButtonClick: boxControl.isSelected)
         boxControl.layer.removeAnimation(forKey: "SelectControlAnimation")
         let keyAnimation = CAKeyframeAnimation.init(keyPath: "transform.scale")
@@ -167,7 +221,7 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
         boxControl.layer.add(keyAnimation, forKey: "SelectControlAnimation")
     }
     func requestAssetBytes() {
-        if isExternalPreview {
+        if sourceType == .browser {
            return
         }
         if !config.showOriginalFileSize || !isMultipleSelect {
@@ -177,7 +231,7 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
             cancelRequestAssetFileSize()
             return
         }
-        if let pickerController = viewController()?.pickerController {
+        if let pickerController = viewController?.pickerController {
             if pickerController.selectedAssetArray.isEmpty {
                 cancelRequestAssetFileSize()
                 return
@@ -193,7 +247,7 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
             RunLoop.main.add(timer, forMode: .common)
             originalLoadingDelayTimer = timer
             pickerController.requestSelectedAssetFileSize(
-                isPreview: isPreview
+                isPreview: sourceType == .preview
             ) { [weak self] (bytes, bytesString) in
                 self?.originalLoadingDelayTimer?.invalidate()
                 self?.originalLoadingDelayTimer = nil
@@ -216,7 +270,7 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
         originalLoadingDelayTimer = nil
     }
     func cancelRequestAssetFileSize() {
-        if isExternalPreview {
+        if sourceType == .browser {
            return
         }
         if !config.showOriginalFileSize || !isMultipleSelect {
@@ -224,8 +278,8 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
         }
         originalLoadingDelayTimer?.invalidate()
         originalLoadingDelayTimer = nil
-        if let pickerController = viewController()?.pickerController {
-            pickerController.cancelRequestAssetFileSize(isPreview: isPreview)
+        if let pickerController = viewController?.pickerController {
+            pickerController.cancelRequestAssetFileSize(isPreview: sourceType == .preview)
         }
         showOriginalLoadingView = false
         originalLoadingView.stopAnimating()
@@ -267,67 +321,11 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
     @objc func didFinishButtonClick(button: UIButton) {
         hx_delegate?.bottomView(didFinishButtonClick: self)
     }
-    var allowLoadPhotoLibrary: Bool
-    var isMultipleSelect: Bool
-    var isExternalPreview: Bool
-    var isPreview: Bool
-    
-    init(
-        config: PickerBottomViewConfiguration,
-        allowLoadPhotoLibrary: Bool,
-        isMultipleSelect: Bool,
-        isPreview: Bool,
-        isExternalPreview: Bool) {
-        self.isPreview = isPreview
-        self.isExternalPreview = isExternalPreview
-        self.allowLoadPhotoLibrary = allowLoadPhotoLibrary
-        self.config = config
-        self.isMultipleSelect = isMultipleSelect
-        super.init(frame: CGRect.zero)
-        layoutSubviews()
-        if config.showPrompt &&
-            AssetManager.authorizationStatusIsLimited() &&
-            allowLoadPhotoLibrary &&
-            !isPreview &&
-            !isExternalPreview {
-            addSubview(promptView)
-        }
-        if isExternalPreview {
-            if config.showSelectedView {
-                addSubview(selectedView)
-            }
-            #if HXPICKER_ENABLE_EDITOR
-            if !config.editButtonHidden {
-                addSubview(editBtn)
-            }
-            #endif
-        }else {
-            addSubview(contentView)
-            if config.showSelectedView && isMultipleSelect {
-                addSubview(selectedView)
-            }
-        }
-        configColor()
-        isTranslucent = config.isTranslucent
-    }
-    
-    convenience init(
-        config: PickerBottomViewConfiguration,
-        allowLoadPhotoLibrary: Bool) {
-        self.init(
-            config: config,
-            allowLoadPhotoLibrary: allowLoadPhotoLibrary,
-            isMultipleSelect: true,
-            isPreview: false,
-            isExternalPreview: false
-        )
-    }
     func updatePromptView() {
         if config.showPrompt &&
             AssetManager.authorizationStatusIsLimited() &&
             allowLoadPhotoLibrary &&
-            !isPreview &&
-            !isExternalPreview {
+            sourceType == .picker {
             if promptView.superview == nil {
                 addSubview(promptView)
                 configPromptColor()
@@ -339,7 +337,7 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
         backgroundColor = isDark ? config.backgroundDarkColor : config.backgroundColor
         barTintColor = isDark ? config.barTintDarkColor : config.barTintColor
         barStyle = isDark ? config.barDarkStyle : config.barStyle
-        if !isExternalPreview {
+        if sourceType != .browser {
             configCoreColor()
         }else {
             #if HXPICKER_ENABLE_EDITOR
@@ -437,7 +435,7 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
         if config.showPrompt &&
             AssetManager.authorizationStatusIsLimited()
             && allowLoadPhotoLibrary &&
-            !isPreview && !isExternalPreview {
+            sourceType == .picker {
             let isDark = PhotoManager.isDark
             promptLb.textColor = isDark ? config.promptTitleDarkColor : config.promptTitleColor
             promptIcon.tintColor = isDark ? config.promptIconDarkColor : config.promptIconColor
@@ -445,15 +443,14 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
         }
     }
     func updateFinishButtonTitle() {
-        if isExternalPreview {
-           return
+        guard let picker = viewController?.pickerController,
+              sourceType != .browser else {
+            return
         }
         requestAssetBytes()
         var selectCount = 0
-        if let pickerController = viewController()?.pickerController {
-            if pickerController.config.selectMode == .multiple {
-                selectCount = pickerController.selectedAssetArray.count
-            }
+        if picker.config.selectMode == .multiple {
+            selectCount = picker.selectedAssetArray.count
         }
         if selectCount > 0 {
             finishBtn.isEnabled = true
@@ -468,14 +465,18 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
                 for: .normal
             )
         }else {
-            finishBtn.isEnabled = !config.disableFinishButtonWhenNotSelected
+            if picker.config.selectMode == .single {
+                finishBtn.isEnabled = true
+            }else {
+                finishBtn.isEnabled = !config.disableFinishButtonWhenNotSelected
+            }
             previewBtn.isEnabled = false
             finishBtn.setTitle("完成".localized, for: .normal)
         }
         updateFinishButtonFrame()
     }
     func updateFinishButtonFrame() {
-        if isExternalPreview {
+        if sourceType == .browser {
            return
         }
         var finishWidth: CGFloat = finishBtn.currentTitle!.localized.width(
@@ -494,7 +495,7 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
         finishBtn.centerY = 25
     }
     func updateOriginalButtonFrame() {
-        if isExternalPreview {
+        if sourceType == .browser {
            return
         }
         updateOriginalSubviewFrame()
@@ -504,16 +505,22 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
             originalBtn.frame = CGRect(x: 0, y: 0, width: originalTitleLb.frame.maxX, height: 50)
         }
         originalBtn.centerX = width / 2
-        if originalBtn.frame.maxX > finishBtn.x {
+        let originalMinX: CGFloat
+        #if HXPICKER_ENABLE_EDITOR
+        originalMinX = sourceType == .preview ? editBtn.frame.maxX + 2 : previewBtn.frame.maxX + 2
+        #else
+        originalMinX = sourceType == .preview ? 10 : previewBtn.frame.maxX + 2
+        #endif
+        if originalBtn.frame.maxX > finishBtn.x || originalBtn.x < originalMinX {
             originalBtn.x = finishBtn.x - originalBtn.width
-            if originalBtn.x < previewBtn.frame.maxX + 2 {
-                originalBtn.x = previewBtn.frame.maxX + 2
-                originalTitleLb.width = finishBtn.x - previewBtn.frame.maxX - 2 - 5 - boxControl.width
+            if originalBtn.x < originalMinX {
+                originalBtn.x = originalMinX
+                originalTitleLb.width = finishBtn.x - originalMinX - 5 - boxControl.width
             }
         }
     }
     private func updateOriginalSubviewFrame() {
-        if isExternalPreview {
+        if sourceType == .browser {
            return
         }
         originalTitleLb.frame = CGRect(
@@ -525,18 +532,17 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
             ),
             height: 50
         )
+        if originalTitleLb.width > width - previewBtn.frame.maxX - finishBtn.width - 12 {
+            originalTitleLb.width = width - previewBtn.frame.maxX - finishBtn.width - 12
+        }
         boxControl.centerY = originalTitleLb.height * 0.5
         originalLoadingView.centerY = originalBtn.height * 0.5
         originalLoadingView.x = originalTitleLb.frame.maxX + 3
     }
-    // MARK: PhotoPreviewSelectedViewDelegate
-    func selectedView(_ selectedView: PhotoPreviewSelectedView, didSelectItemAt photoAsset: PhotoAsset) {
-        hx_delegate?.bottomView(self, didSelectedItemAt: photoAsset)
-    }
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        if !isExternalPreview {
+        if sourceType != .browser {
             contentView.width = width
             contentView.height = 50 + UIDevice.bottomMargin
             contentView.y = height - contentView.height
@@ -550,8 +556,7 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
         if config.showPrompt &&
             AssetManager.authorizationStatusIsLimited() &&
             allowLoadPhotoLibrary &&
-            !isPreview &&
-            !isExternalPreview {
+            sourceType == .picker {
             promptView.width = width
             promptIcon.x = 12 + UIDevice.leftMargin
             promptIcon.centerY = promptView.height * 0.5
@@ -561,7 +566,7 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
             promptLb.centerY = promptView.height * 0.5
             promptArrow.centerY = promptView.height * 0.5
         }
-        if isExternalPreview {
+        if sourceType == .browser {
             #if HXPICKER_ENABLE_EDITOR
             editBtn.x = 12 + UIDevice.leftMargin
             #endif
@@ -601,5 +606,16 @@ class PhotoPickerBottomView: UIToolbar, PhotoPreviewSelectedViewDelegate {
     }
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+}
+
+// MARK: PhotoPreviewSelectedViewDelegate
+extension PhotoPickerBottomView {
+    
+    func selectedView(
+        _ selectedView: PhotoPreviewSelectedView,
+        didSelectItemAt photoAsset: PhotoAsset
+    ) {
+        hx_delegate?.bottomView(self, didSelectedItemAt: photoAsset)
     }
 }

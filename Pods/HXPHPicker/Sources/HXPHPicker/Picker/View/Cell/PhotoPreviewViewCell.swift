@@ -14,6 +14,8 @@ import ImageIO
 protocol PhotoPreviewViewCellDelegate: AnyObject {
     func cell(singleTap cell: PhotoPreviewViewCell)
     func cell(longPress cell: PhotoPreviewViewCell)
+    func cell(requestSucceed cell: PhotoPreviewViewCell)
+    func cell(requestFailed cell: PhotoPreviewViewCell)
     func photoCell(networkImagedownloadSuccess photoCell: PhotoPreviewViewCell)
     func photoCell(networkImagedownloadFailed photoCell: PhotoPreviewViewCell)
 }
@@ -58,6 +60,8 @@ open class PhotoPreviewViewCell: UICollectionViewCell, UIScrollViewDelegate {
             scrollContentView.photoAsset = photoAsset
         }
     }
+    
+    var statusBarShouldBeHidden = false
     var allowInteration: Bool = true
     override init(frame: CGRect) {
         super.init(frame: frame)

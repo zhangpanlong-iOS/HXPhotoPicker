@@ -37,8 +37,6 @@ open class PreviewVideoViewCell: PhotoPreviewViewCell, PhotoPreviewContentViewDe
         }
     }
     
-    var statusBarShouldBeHidden = false
-    
     override init(frame: CGRect) {
         super.init(frame: frame)
         scrollContentView = PhotoPreviewContentView.init(type: .video)
@@ -57,21 +55,14 @@ open class PreviewVideoViewCell: PhotoPreviewViewCell, PhotoPreviewContentViewDe
         }
     }
     
+    public func contentView(requestSucceed contentView: PhotoPreviewContentView) {
+        delegate?.cell(requestSucceed: self)
+    }
+    public func contentView(requestFailed contentView: PhotoPreviewContentView) {
+        delegate?.cell(requestFailed: self)
+    }
     public func contentView(updateContentSize contentView: PhotoPreviewContentView) {
-        guard let videoAsset = photoAsset.networkVideoAsset,
-              videoAsset.coverImage == nil,
-              videoAsset.videoSize.equalTo(.zero) else {
-            return
-        }
-        guard let image = PhotoTools.getVideoThumbnailImage(videoURL: videoAsset.videoURL, atTime: 0.1) else {
-            return
-        }
-        let videoScale = image.width / image.height
-        let viewScale = contentView.width / contentView.height
-        if videoScale != viewScale {
-            photoAsset.networkVideoAsset?.videoSize = image.size
-            setupScrollViewContentSize()
-        }
+        setupScrollViewContentSize()
     }
     public func contentView(networkImagedownloadSuccess contentView: PhotoPreviewContentView) {
         

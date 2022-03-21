@@ -17,9 +17,6 @@ public class PhotoPickerViewController: BaseViewController {
         self.config = config
         super.init(nibName: nil, bundle: nil)
     }
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
     var assetCollection: PhotoAssetCollection!
     var assets: [PhotoAsset] = []
     var swipeSelectBeganIndexPath: IndexPath?
@@ -77,6 +74,20 @@ public class PhotoPickerViewController: BaseViewController {
                     NSStringFromClass(PickerCamerViewCell.classForCoder())
             )
         }
+        if #available(iOS 14.0, *), config.allowAddLimit {
+            collectionView.register(
+                PhotoPickerLimitCell.self,
+                forCellWithReuseIdentifier:
+                    NSStringFromClass(PhotoPickerLimitCell.classForCoder())
+            )
+        }
+        if config.showAssetNumber {
+            collectionView.register(
+                PhotoPickerBottomNumberView.self,
+                forSupplementaryViewOfKind: UICollectionView.elementKindSectionFooter,
+                withReuseIdentifier: NSStringFromClass(PhotoPickerBottomNumberView.classForCoder())
+            )
+        }
         if #available(iOS 11.0, *) {
             collectionView.contentInsetAdjustmentBehavior = .never
         } else {
@@ -86,41 +97,12 @@ public class PhotoPickerViewController: BaseViewController {
         return collectionView
     }()
     
-    var cameraCell: PickerCamerViewCell {
-        var indexPath: IndexPath
-        if config.sort == .asc {
-            indexPath = IndexPath(item: assets.count, section: 0)
-        }else {
-            indexPath = IndexPath(item: 0, section: 0)
-        }
-        let cell = collectionView.dequeueReusableCell(
-            withReuseIdentifier: NSStringFromClass(
-                PickerCamerViewCell.classForCoder()
-            ),
-            for: indexPath
-        ) as! PickerCamerViewCell
-        cell.config = config.cameraCell
-        return cell
-    }
-    
     private lazy var emptyView: EmptyView = {
         let emptyView = EmptyView.init(frame: CGRect(x: 0, y: 0, width: view.width, height: 0))
         emptyView.config = config.emptyView
         emptyView.layoutSubviews()
         return emptyView
     }()
-    
-    var canAddCamera: Bool = false
-    var orientationDidChange: Bool = false
-    var beforeOrientationIndexPath: IndexPath?
-    var showLoading: Bool = false
-    var isMultipleSelect: Bool = false
-    var videoLoadSingleCell = false
-    var needOffset: Bool {
-        config.sort == .desc &&
-            config.allowAddCamera &&
-            canAddCamera
-    }
     lazy var titleLabel: UILabel = {
         let titleLabel = UILabel.init()
         titleLabel.font = UIFont.boldSystemFont(ofSize: 18)
@@ -161,11 +143,111 @@ public class PhotoPickerViewController: BaseViewController {
         bottomView.boxControl.isSelected = pickerController!.isOriginal
         return bottomView
     }()
+    
+    var showLoading: Bool = false
+    /// 允许加载系统相册库
     var allowLoadPhotoLibrary: Bool = true
+    /// 是否为多选模式
+    var isMultipleSelect: Bool = false
+    /// 视频 Cell 为单选类型
+    var videoLoadSingleCell = false
+    /// 照片数量
+    var photoCount: Int = 0
+    /// 视频数量
+    var videoCount: Int = 0
+    
+    // MARK: 屏幕旋转相关
+    var orientationDidChange: Bool = false
+    var beforeOrientationIndexPath: IndexPath?
+    
+    // MARK: 滑动选择相关
     var swipeSelectAutoScrollTimer: DispatchSourceTimer?
     var swipeSelectPanGR: UIPanGestureRecognizer?
     var swipeSelectLastLocalPoint: CGPoint?
     
+    // MARK: 相机/更多 Cell 相关
+    var limitAddCell: PhotoPickerLimitCell {
+        let indexPath: IndexPath
+        if config.sort == .asc {
+            if canAddCamera {
+                indexPath = IndexPath(item: assets.count - 1, section: 0)
+            }else {
+                indexPath = IndexPath(item: assets.count, section: 0)
+            }
+        }else {
+            if canAddCamera {
+                indexPath = IndexPath(item: 1, section: 0)
+            }else {
+                indexPath = IndexPath(item: 0, section: 0)
+            }
+        }
+        let cell = collectionView.dequeueReusableCell(
+            withReuseIdentifier: NSStringFromClass(
+                PhotoPickerLimitCell.classForCoder()
+            ),
+            for: indexPath
+        ) as! PhotoPickerLimitCell
+        cell.config = config.limitCell
+        return cell
+    }
+    var cameraCell: PickerCamerViewCell {
+        let indexPath: IndexPath
+        if config.sort == .asc {
+            indexPath = IndexPath(item: assets.count, section: 0)
+        }else {
+            indexPath = IndexPath(item: 0, section: 0)
+        }
+        let cell = collectionView.dequeueReusableCell(
+            withReuseIdentifier: NSStringFromClass(
+                PickerCamerViewCell.classForCoder()
+            ),
+            for: indexPath
+        ) as! PickerCamerViewCell
+        cell.config = config.cameraCell
+        return cell
+    }
+    var didFetchAsset: Bool = false
+    var canAddCamera: Bool {
+        if didFetchAsset && config.allowAddCamera {
+            return true
+        }
+        return false
+    }
+    var canAddLimit: Bool {
+        if didFetchAsset && config.allowAddLimit && AssetManager.authorizationStatusIsLimited() {
+            return true
+        }
+        return false
+    }
+    var needOffset: Bool {
+        if config.sort == .desc {
+            if canAddCamera || canAddLimit {
+                return true
+            }
+        }
+        return false
+    }
+    var offsetIndex: Int {
+        if !needOffset {
+            return 0
+        }
+        if canAddCamera && canAddLimit {
+            return 2
+        }else if canAddCamera {
+            return 1
+        }else {
+            return 1
+        }
+    }
+    
+    // MARK: UIScrollView滚动相关
+    var scrollToTop = false
+    var targetOffsetY: CGFloat = 0
+    var didChangeCellLoadMode: Bool = false
+    var scrollEndReload: Bool = false
+    var scrollReachDistance = false
+    
+    // MARK: function
     public override func viewDidLoad() {
         super.viewDidLoad()
         guard let picker = pickerController else {
@@ -173,7 +255,7 @@ public class PhotoPickerViewController: BaseViewController {
         }
         allowLoadPhotoLibrary = picker.config.allowLoadPhotoLibrary
         if AssetManager.authorizationStatus() == .notDetermined {
-            canAddCamera = true
+            didFetchAsset = true
         }
         configData()
         initView()
@@ -202,7 +284,11 @@ public class PhotoPickerViewController: BaseViewController {
         var collectionTop: CGFloat = UIDevice.navigationBarHeight
         if let nav = navigationController {
             if nav.modalPresentationStyle == .fullScreen && UIDevice.isPortrait {
-                collectionTop = UIDevice.navigationBarHeight
+                if UIApplication.shared.isStatusBarHidden {
+                    collectionTop = nav.navigationBar.height + UIDevice.generalStatusBarHeight
+                }else {
+                    collectionTop = UIDevice.navigationBarHeight
+                }
             }else {
                 collectionTop = nav.navigationBar.height
             }
@@ -307,8 +393,8 @@ public class PhotoPickerViewController: BaseViewController {
             }
         }
     }
-    deinit {
-        NotificationCenter.default.removeObserver(self)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 }
 
@@ -404,7 +490,7 @@ extension PhotoPickerViewController {
         if let photoAsset = photoAsset,
            var item = assets.firstIndex(of: photoAsset) {
             if needOffset {
-                item += 1
+                item += offsetIndex
             }
             collectionView.scrollToItem(
                 at: IndexPath(item: item, section: 0),
@@ -437,10 +523,17 @@ extension PhotoPickerViewController {
         }
     }
     func scrollToAppropriatePlace(photoAsset: PhotoAsset?) {
+        if assets.isEmpty {
+            return
+        }
         var item = config.sort == .asc ? assets.count - 1 : 0
         if let photoAsset = photoAsset {
             item = assets.firstIndex(of: photoAsset) ?? item
-            if needOffset {
+        }
+        if config.sort == .asc {
+            if canAddCamera && canAddLimit {
+                item += 2
+            }else if canAddCamera || canAddLimit {
                 item += 1
             }
         }
@@ -449,7 +542,7 @@ extension PhotoPickerViewController {
                 item: item,
                 section: 0
             ),
-            at: .centeredVertically,
+            at: config.sort == .asc ? .bottom : .top,
             animated: false
         )
     }
@@ -478,7 +571,7 @@ extension PhotoPickerViewController {
         }
         if var item = assets.firstIndex(of: photoAsset) {
             if needOffset {
-                item += 1
+                item += offsetIndex
             }
             return IndexPath(item: item, section: 0)
         }
@@ -489,10 +582,17 @@ extension PhotoPickerViewController {
             collectionView.reloadItems(at: [indexPath])
         }
     }
+    func resetICloud(for photoAsset: PhotoAsset) {
+        guard let cell = getCell(for: photoAsset),
+              cell.inICloud else {
+            return
+        }
+        cell.requestICloudState()
+    }
     func getPhotoAsset(for index: Int) -> PhotoAsset {
-        var photoAsset: PhotoAsset
+        let photoAsset: PhotoAsset
         if needOffset {
-            photoAsset = assets[index - 1]
+            photoAsset = assets[index - offsetIndex]
         }else {
             photoAsset = assets[index]
         }
@@ -503,13 +603,13 @@ extension PhotoPickerViewController {
         if config.sort == .desc {
             assets.insert(photoAsset, at: 0)
             indexPath = IndexPath(
-                item: needOffset ? 1 : 0,
+                item: needOffset ? offsetIndex : 0,
                 section: 0
             )
         }else {
             assets.append(photoAsset)
             indexPath = IndexPath(
-                item: needOffset ? assets.count : assets.count - 1,
+                item: assets.count - 1,
                 section: 0
             )
         }
@@ -553,24 +653,21 @@ extension PhotoPickerViewController {
     }
     func updateCellSelectedTitle() {
         guard let picker = pickerController else { return }
-        for visibleCell in collectionView.visibleCells {
-            if visibleCell is PhotoPickerBaseViewCell,
-               let photoAsset = (visibleCell as? PhotoPickerBaseViewCell)?.photoAsset {
-                let cell = visibleCell as! PhotoPickerBaseViewCell
-                if !photoAsset.isSelected &&
-                    config.cell.showDisableMask &&
-                    picker.config.maximumSelectedVideoFileSize == 0  &&
-                    picker.config.maximumSelectedPhotoFileSize == 0 {
-                    cell.canSelect = picker.canSelectAsset(
-                        for: photoAsset,
-                        showHUD: false
-                    )
-                }
-                cell.updateSelectedState(
-                    isSelected: photoAsset.isSelected,
-                    animated: false
+        for case let cell as PhotoPickerBaseViewCell in collectionView.visibleCells {
+            guard let photoAsset = cell.photoAsset else { continue }
+            if !photoAsset.isSelected &&
+                config.cell.showDisableMask &&
+                picker.config.maximumSelectedVideoFileSize == 0  &&
+                picker.config.maximumSelectedPhotoFileSize == 0 {
+                cell.canSelect = picker.canSelectAsset(
+                    for: photoAsset,
+                    showHUD: false
                 )
             }
+            cell.updateSelectedState(
+                isSelected: photoAsset.isSelected,
+                animated: false
+            )
         }
     }
     

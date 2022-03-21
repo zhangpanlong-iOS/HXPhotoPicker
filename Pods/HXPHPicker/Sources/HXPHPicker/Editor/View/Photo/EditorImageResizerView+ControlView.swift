@@ -63,7 +63,6 @@ extension EditorImageResizerView: EditorImageResizerControlViewDelegate {
             userInfo: nil,
             repeats: false
         )
-        RunLoop.main.add(timer, forMode: .common)
         controlTimer = timer
         inControlTimer = true
     }
@@ -104,8 +103,6 @@ extension EditorImageResizerView: EditorImageResizerControlViewDelegate {
         let beforeRect = controlView.frame
         /// 裁剪框当前在imageView上的坐标
         let controlBeforeRect = maskBgView.convert(controlView.frame, to: imageView)
-        /// 隐藏阴影
-        maskLinesView.setupShadow(true)
         /// 更新裁剪框坐标
         updateMaskViewFrame(to: rect, animated: animated)
         /// 裁剪框更新之后再imageView上的坐标
@@ -152,7 +149,11 @@ extension EditorImageResizerView: EditorImageResizerControlViewDelegate {
             isUserInteractionEnabled = false
             let currentOffset = scrollView.contentOffset
             scrollView.setContentOffset(currentOffset, animated: false)
-            UIView.animate(withDuration: animationDuration, delay: 0, options: [.curveLinear]) {
+            UIView.animate(
+                withDuration: animationDuration,
+                delay: 0,
+                options: [.curveEaseOut]
+            ) {
                 self.updateScrollViewContentInset(rect)
                 if needZoomScale {
                     /// 需要进行缩放
@@ -165,9 +166,6 @@ extension EditorImageResizerView: EditorImageResizerControlViewDelegate {
                 }
                 self.scrollView.contentOffset = offset
             } completion: { (isFinished) in
-                if showMaskShadow {
-                    self.maskLinesView.setupShadow(false)
-                }
                 self.maskBgViewisShowing = false
                 self.inControlTimer = false
                 self.delegate?.imageResizerView(didEndChangedMaskRect: self)
@@ -185,15 +183,15 @@ extension EditorImageResizerView: EditorImageResizerControlViewDelegate {
                 )
             }
             scrollView.contentOffset = offset
-            if showMaskShadow {
-                maskLinesView.setupShadow(false)
-            }
             maskBgViewisShowing = false
             inControlTimer = false
             delegate?.imageResizerView(didEndChangedMaskRect: self)
         }
     }
-    func checkZoomOffset(_ offset: CGPoint, _ scrollCotentInset: UIEdgeInsets) -> CGPoint {
+    func checkZoomOffset(
+        _ offset: CGPoint,
+        _ scrollCotentInset: UIEdgeInsets
+    ) -> CGPoint {
         var offsetX = offset.x
         var offsetY = offset.y
         var maxOffsetX: CGFloat

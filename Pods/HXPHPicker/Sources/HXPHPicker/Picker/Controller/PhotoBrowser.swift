@@ -55,6 +55,7 @@ open class PhotoBrowser: PhotoPickerController {
         let previewConfig = PickerConfiguration()
         previewConfig.prefersStatusBarHidden = true
         previewConfig.statusBarStyle = .lightContent
+        previewConfig.adaptiveBarAppearance = false
         
         var pConfig = PreviewViewConfiguration()
         pConfig.singleClickCellAutoPlayVideo = false
@@ -114,9 +115,9 @@ open class PhotoBrowser: PhotoPickerController {
         )
         navigationBar.barTintColor = .clear
         navigationBar.backgroundColor = .clear
-        previewViewController()?.navigationItem.titleView = titleLabel
+        previewViewController?.navigationItem.titleView = titleLabel
         if showDelete {
-            previewViewController()?.navigationItem.rightBarButtonItem = UIBarButtonItem(
+            previewViewController?.navigationItem.rightBarButtonItem = UIBarButtonItem(
                 title: "删除".localized,
                 style: .done,
                 target: self,
@@ -133,7 +134,7 @@ open class PhotoBrowser: PhotoPickerController {
     private let longPressHandler: AssetHandler?
     private let transitionalImage: UIImage?
     
-    lazy var titleLabel: UILabel = {
+    fileprivate lazy var titleLabel: UILabel = {
         let titleLabel = UILabel.init()
         titleLabel.size = CGSize(width: 100, height: 30)
         titleLabel.textColor = .white
@@ -142,8 +143,24 @@ open class PhotoBrowser: PhotoPickerController {
         return titleLabel
     }()
     
+    fileprivate lazy var gradualShadowImageView: UIImageView = {
+        let navHeight = navigationBar.height
+        let view = UIImageView(
+            image: UIImage.gradualShadowImage(
+                CGSize(
+                    width: view.width,
+                    height: UIDevice.isAllIPhoneX ? navHeight + 60 : navHeight + 30
+                )
+            )
+        )
+        view.alpha = 0
+        return view
+    }()
+    
+    fileprivate var didHidden: Bool = false
+    
     @objc func deletePreviewAsset() {
-        guard let preview = previewViewController(),
+        guard let preview = previewViewController,
               !preview.previewAssets.isEmpty else {
             return
         }
@@ -154,13 +171,33 @@ open class PhotoBrowser: PhotoPickerController {
         )
     }
     
+    public override func viewDidLoad() {
+        super.viewDidLoad()
+        view.insertSubview(gradualShadowImageView, belowSubview: navigationBar)
+    }
+    
+    public override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        let imageHeight = UIDevice.isAllIPhoneX ? navigationBar.height + 54 : navigationBar.height + 30
+        gradualShadowImageView.frame = CGRect(origin: .zero, size: CGSize(width: view.width, height: imageHeight))
+    }
+    
     required public init?(coder aDecoder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
 }
 
 extension PhotoBrowser: PhotoPickerControllerDelegate {
-    
+    public func pickerController(
+        _ pickerController: PhotoPickerController,
+        viewControllersWillAppear viewController: UIViewController
+    ) {
+        navigationBar
+            .setBackgroundImage(
+                UIImage.image(for: UIColor.clear, havingSize: .zero),
+                for: .default
+            )
+    }
     public func pickerController(
         _ pickerController: PhotoPickerController,
         previewSingleClick photoAsset: PhotoAsset,
@@ -168,6 +205,13 @@ extension PhotoBrowser: PhotoPickerControllerDelegate {
     ) {
         if photoAsset.mediaType == .photo {
             pickerController.dismiss(animated: true, completion: nil)
+        }else {
+            didHidden = !didHidden
+            UIView.animate(withDuration: 0.25) {
+                self.gradualShadowImageView.alpha = self.didHidden ? 0 : 1
+            } completion: { _ in
+                self.gradualShadowImageView.alpha = self.didHidden ? 0 : 1
+            }
         }
     }
     
@@ -176,25 +220,10 @@ extension PhotoBrowser: PhotoPickerControllerDelegate {
         previewUpdateCurrentlyDisplayedAsset photoAsset: PhotoAsset,
         atIndex: Int
     ) {
-        if let preview = previewViewController() {
-            titleLabel.text = String(atIndex + 1) + "/" + String(preview.previewAssets.count)
+        guard let preview = previewViewController else {
+            return
         }
-    }
-    
-    public func pickerController(
-        _ pickerController: PhotoPickerController,
-        viewControllersWillAppear viewController: UIViewController
-    ) {
-        let navHeight = viewController.navigationController?.navigationBar.height ?? 0
-        viewController.navigationController?.navigationBar.setBackgroundImage(
-            UIImage.gradualShadowImage(
-                CGSize(
-                    width: pickerController.view.width,
-                    height: UIDevice.isAllIPhoneX ? navHeight + 54 : navHeight + 30
-                )
-            ),
-            for: .default
-        )
+        titleLabel.text = String(atIndex + 1) + "/" + String(preview.previewAssets.count)
     }
     
     public func pickerController(
@@ -231,5 +260,37 @@ extension PhotoBrowser: PhotoPickerControllerDelegate {
         dismissPreviewViewForIndexAt index: Int
     ) -> UIView? {
         transitionHandler?(index)
+    }
+    
+    public func pickerController(
+        _ pickerController: PhotoPickerController,
+        animateTransition type: PickerTransitionType
+    ) {
+        gradualShadowImageView.alpha = type == .present ? 1 : 0
+    }
+    
+    public func pickerController(
+        _ pickerController: PhotoPickerController,
+        interPercentUpdate scale: CGFloat,
+        type: PickerInteractiveTransitionType
+    ) {
+        if didHidden { return }
+        gradualShadowImageView.alpha = scale
+    }
+    
+    public func pickerController(
+        _ pickerController: PhotoPickerController,
+        interPercentDidFinishAnimation type: PickerInteractiveTransitionType
+    ) {
+        gradualShadowImageView.alpha = 0
+    }
+    
+    public func pickerController(
+        _ pickerController: PhotoPickerController,
+        interPercentDidCancelAnimation type: PickerInteractiveTransitionType
+    ) {
+        if !didHidden {
+            gradualShadowImageView.alpha = 1
+        }
     }
 }

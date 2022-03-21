@@ -53,8 +53,12 @@ open class AlbumViewCell: UITableViewCell {
     /// 配置
     public var config: AlbumListConfiguration? {
         didSet {
-            albumNameLb.font = config?.albumNameFont
-            photoCountLb.font = config?.photoCountFont
+            guard let config = config else {
+                return
+            }
+            albumNameLb.font = config.albumNameFont
+            photoCountLb.font = config.photoCountFont
+            photoCountLb.isHidden = !config.showPhotoCount
             configColor()
         }
     }
@@ -62,9 +66,12 @@ open class AlbumViewCell: UITableViewCell {
     /// 照片集合
     public var assetCollection: PhotoAssetCollection? {
         didSet {
-            albumNameLb.text = assetCollection?.albumName
-            photoCountLb.text = String(assetCollection!.count)
-            tickView.isHidden = !(assetCollection?.isSelected ?? false)
+            guard let assetCollection = assetCollection else {
+                return
+            }
+            albumNameLb.text = assetCollection.albumName
+            photoCountLb.text = String(assetCollection.count)
+            tickView.isHidden = !assetCollection.isSelected
             requestCoverImage()
         }
     }
@@ -82,6 +89,7 @@ open class AlbumViewCell: UITableViewCell {
     
     /// 获取相册封面图片，重写此方法修改封面图片
     open func requestCoverImage() {
+        cancelRequest()
         requestID = assetCollection?.requestCoverImage(completion: { [weak self] (image, assetCollection, info) in
             guard let self = self else { return }
             if let info = info, info.isCancel { return }
@@ -107,8 +115,8 @@ open class AlbumViewCell: UITableViewCell {
             selectedBgView.backgroundColor = config?.cellSelectedDarkColor
             selectedBackgroundView = selectedBgView
         }else {
-            if config?.cellSelectedColor != nil {
-                selectedBgView.backgroundColor = config?.cellSelectedColor
+            if let color = config?.cellSelectedColor {
+                selectedBgView.backgroundColor = color
                 selectedBackgroundView = selectedBgView
             }else {
                 selectedBackgroundView = nil
@@ -161,5 +169,8 @@ open class AlbumViewCell: UITableViewCell {
     }
     required public init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
+    }
+    deinit {
+        cancelRequest()
     }
 }

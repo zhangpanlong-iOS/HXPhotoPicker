@@ -10,14 +10,14 @@ import UIKit
 public class EditorImageResizerMaskView: UIView {
     
     lazy var visualEffectView: UIVisualEffectView = {
-        let visualEffect = UIBlurEffect.init(style: maskType == .darkBlurEffect ? .dark : .light)
-        let view = UIVisualEffectView.init(effect: visualEffect)
+        let visualEffect = UIBlurEffect(style: maskType == .darkBlurEffect ? .dark : .light)
+        let view = UIVisualEffectView(effect: visualEffect)
         view.isUserInteractionEnabled = false
         return view
     }()
     
     lazy var blackMaskView: UIView = {
-        let view = UIView.init()
+        let view = UIView()
         view.isHidden = true
         view.alpha = 0
         view.isUserInteractionEnabled = false
@@ -26,23 +26,26 @@ public class EditorImageResizerMaskView: UIView {
     }()
     
     lazy var maskLayer: CAShapeLayer = {
-        let layer = CAShapeLayer.init()
+        let layer = CAShapeLayer()
         layer.contentsScale = UIScreen.main.scale
         return layer
     }()
     
     lazy var frameLayer: CAShapeLayer = {
-        let layer = CAShapeLayer.init()
+        let layer = CAShapeLayer()
         layer.strokeColor = UIColor.white.cgColor
         layer.fillColor = UIColor.clear.cgColor
         layer.lineWidth = 1.2
         layer.shadowOffset = CGSize(width: -1, height: 1)
         layer.contentsScale = UIScreen.main.scale
+        layer.shouldRasterize = true
+        layer.rasterizationScale = layer.contentsScale
+        layer.shadowOpacity = 0.5
         return layer
     }()
     
     lazy var dotsLayer: CAShapeLayer = {
-        let layer = CAShapeLayer.init()
+        let layer = CAShapeLayer()
         layer.strokeColor = UIColor.white.cgColor
         layer.fillColor = UIColor.clear.cgColor
         layer.lineWidth = 3.5
@@ -51,26 +54,38 @@ public class EditorImageResizerMaskView: UIView {
     }()
     
     lazy var gridlinesLayer: CAShapeLayer = {
-        let layer = CAShapeLayer.init()
+        let layer = CAShapeLayer()
         layer.strokeColor = UIColor.white.withAlphaComponent(0.7).cgColor
         layer.fillColor = UIColor.clear.cgColor
         layer.lineWidth = 0.5
         layer.shadowOffset = CGSize(width: -1, height: 1)
         layer.contentsScale = UIScreen.main.scale
+        layer.shouldRasterize = true
+        layer.rasterizationScale = layer.contentsScale
+        layer.shadowOpacity = 0.5
+        layer.isHidden = true
         return layer
     }()
     /// 圆形裁剪框
     var isRoundCrop: Bool = false
-    var animationDuration: TimeInterval = 0.25
+    var animationDuration: TimeInterval = 0.3
     let isMask: Bool
     let maskType: MaskType
+    
+    var isCropTime: Bool = false {
+        didSet {
+            backgroundColor = .black.withAlphaComponent(isCropTime ? 1 : 0.6)
+            visualEffectView.isHidden = isCropTime
+        }
+    }
+    
     init(isMask: Bool, maskType: MaskType = .blackColor) {
         self.isMask = isMask
         self.maskType = maskType
         super.init(frame: .zero)
         if isMask {
             if maskType == .blackColor {
-                backgroundColor = UIColor.black.withAlphaComponent(0.6)
+                backgroundColor = .black.withAlphaComponent(0.6)
             }else {
                 addSubview(visualEffectView)
             }
@@ -86,12 +101,12 @@ public class EditorImageResizerMaskView: UIView {
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
     }
-    func updateBlackMask(isShow: Bool, animated: Bool, completion: (() -> Void)?) {
+    func updateBlackMask(isShow: Bool, animated: Bool, completion: (() -> Void)? = nil) {
         if animated {
             if isShow {
                 blackMaskView.isHidden = false
             }
-            UIView.animate(withDuration: animationDuration, delay: 0, options: .curveLinear) {
+            UIView.animate(withDuration: animationDuration, delay: 0, options: .curveEaseOut) {
                 self.blackMaskView.alpha = isShow ? 1 : 0
             } completion: { (_) in
                 if !isShow {
@@ -119,7 +134,8 @@ public class EditorImageResizerMaskView: UIView {
                     "path",
                     maskLayer.path,
                     maskPath.cgPath,
-                    animationDuration
+                    animationDuration,
+                    .easeOut
                 )
                 maskLayer.add(maskAnimation, forKey: nil)
             }
@@ -154,7 +170,8 @@ public class EditorImageResizerMaskView: UIView {
                     "path",
                     frameLayer.path,
                     framePath.cgPath,
-                    animationDuration
+                    animationDuration,
+                    .easeOut
                 )
                 frameLayer.add(frameAnimation, forKey: nil)
                 if !isRoundCrop {
@@ -162,13 +179,15 @@ public class EditorImageResizerMaskView: UIView {
                         "path",
                         gridlinesLayer.path,
                         gridlinePath.cgPath,
-                        animationDuration
+                        animationDuration,
+                        .easeOut
                     )
                     gridlinesLayer.add(gridlinesAnimation, forKey: nil)
                     let dotsAnimation = PhotoTools.getBasicAnimation(
                         "path",
                         dotsLayer.path,
-                        dotsPath.cgPath, animationDuration
+                        dotsPath.cgPath, animationDuration,
+                        .easeOut
                     )
                     dotsLayer.add(dotsAnimation, forKey: nil)
                 }
@@ -183,19 +202,15 @@ public class EditorImageResizerMaskView: UIView {
             CATransaction.commit()
         }
     }
-    func setupShadow(_ isHidden: Bool) {
-        let shadowColor = UIColor.black.cgColor
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        frameLayer.shadowColor = isHidden ? nil : shadowColor
-        frameLayer.shadowOpacity = isHidden ? 0 : 0.5
-        frameLayer.shadowPath = isHidden ? UIBezierPath.init(rect: .zero).cgPath : nil
-        if !isRoundCrop {
-            gridlinesLayer.shadowColor = isHidden ? nil : shadowColor
-            gridlinesLayer.shadowOpacity = isHidden ? 0 : 0.5
-            gridlinesLayer.shadowPath = isHidden ? UIBezierPath.init(rect: .zero).cgPath : nil
+    func showShadow(_ isShow: Bool) {
+        frameLayer.isHidden = !isShow
+    }
+    
+    func showGridlinesLayer(_ isShow: Bool) {
+        if isRoundCrop {
+            return
         }
-        CATransaction.commit()
+        gridlinesLayer.isHidden = !isShow
     }
     
     func getDotsPath(

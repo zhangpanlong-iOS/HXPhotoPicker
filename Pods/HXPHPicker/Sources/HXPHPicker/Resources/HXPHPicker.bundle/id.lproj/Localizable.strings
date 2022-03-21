@@ -6,10 +6,12 @@
 "相册" = "album Foto";
 "完成" = "bawa";
 "原图" = "Gambar asli";
+"原片" = "Gambar asli";
 "预览" = "Pratinjau";
 "编辑" = "edit";
 "返回" = "kembali";
 "还原" = "pengurangan";
+"自由" = "Gratis";
 "没有可选资源" = "Tidak ada sumber daya opsional";
 "照片和视频不能同时选择" = "Foto dan video tidak dapat dipilih secara bersamaan";
 "最多只能选择%d张照片" = "Anda hanya dapat memilih maksimal %d foto";
@@ -32,7 +34,8 @@
 "视频导出失败" = "Ekspor video gagal";
 "保存失败" = "Gagal menyimpan";
 "所有照片" = "Semua foto";
-"视频导出中" = "Ekspor video";
+"正在处理..." = "Pengolahan...";
+"处理失败" = "Pemrosesan gagal";
 "导出失败" = "Ekspor gagal";
 "视频加载中" = "Pemuatan video";
 "视频加载失败!" = "Video gagal dimuat!";
@@ -45,6 +48,8 @@
 "图片下载中" = "Pengunduhan gambar";
 "视频下载中" = "Pengunduhan video";
 "设置失败!" = "Penyiapan gagal!";
+"唯美" = "Nashville";
+"梦幻" = "Toaster";
 "老电影" = "film lama";
 "怀旧" = "Nostalgia";
 "黑白" = "Hitam dan putih";
@@ -79,6 +84,15 @@
 "麦克风添加失败，录制视频会没有声音哦!" = "Gagal menambahkan mikrofon, tidak akan ada suara saat merekam video!";
 "无法使用麦克风" = "Tidak dapat menggunakan mikrofon";
 "请在设置-隐私-相机中允许访问麦克风" = "Harap izinkan akses ke mikrofon di Pengaturan-Privasi-Kamera";
+"更多" = "Lagi";
+"张照片" = "Foto";
+"个视频" = "Video";
+"实况" = "Hidup";
+"照片" = "Foto";
+"视频" = "video";
+"点击摄像" = "Klik untuk merekam";
+"音量" = "volume";
+"明亮" = "lampu";
 
 "HXAlbumCameraRoll" = "Semua foto";
 "HXAlbumPanoramas" = "gambar panorama";

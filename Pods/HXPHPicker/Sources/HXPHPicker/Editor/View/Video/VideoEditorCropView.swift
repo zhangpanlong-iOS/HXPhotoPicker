@@ -32,7 +32,7 @@ class VideoEditorCropView: UIView {
             videoSize = PhotoTools.getVideoThumbnailImage(avAsset: avAsset, atTime: 0.1)?.size ?? .zero
         }
     }
-    var config: VideoCroppingConfiguration
+    var config: VideoCropTimeConfiguration
     
     var videoFrameCount: Int = 0
     lazy var frameMaskView: VideoEditorFrameMaskView = {
@@ -98,13 +98,13 @@ class VideoEditorCropView: UIView {
     var lineDidAnimate = false
     var imageGenerator: AVAssetImageGenerator?
     
-    convenience init(avAsset: AVAsset, config: VideoCroppingConfiguration) {
+    convenience init(avAsset: AVAsset, config: VideoCropTimeConfiguration) {
         self.init(config: config)
         self.avAsset = avAsset
         videoSize = PhotoTools.getVideoThumbnailImage(avAsset: avAsset, atTime: 0.1)?.size ?? .zero
     }
     
-    init(config: VideoCroppingConfiguration) {
+    init(config: VideoCropTimeConfiguration) {
         self.config = config
         super.init(frame: .zero)
         addSubview(collectionView)
@@ -199,10 +199,10 @@ class VideoEditorCropView: UIView {
 // MARK: function
 extension VideoEditorCropView {
     func startLineAnimation(at time: CMTime) {
-        if lineDidAnimate {
-            return
-        }
-        lineDidAnimate = true
+//        if lineDidAnimate {
+//            return
+//        }
+//        lineDidAnimate = true
 //        let duration = getEndDuration() - CGFloat(time.seconds)
         let duration = getEndDuration(real: true) - CGFloat(time.seconds)
         let mixX = frameMaskView.leftControl.frame.maxX
@@ -222,11 +222,11 @@ extension VideoEditorCropView {
         UIView.animate(withDuration: duration, delay: 0, options: [.curveLinear]) {
             self.progressLineView.x = maxX
         } completion: { (isFinished) in
-            if self.lineDidAnimate && isFinished {
-                let mixX = self.frameMaskView.leftControl.frame.maxX
-                let duration = self.getEndDuration(real: true) - self.getStartDuration(real: true)
-                self.setLineAnimation(x: mixX, duration: TimeInterval(duration))
-            }
+//            if self.lineDidAnimate && isFinished {
+//                let mixX = self.frameMaskView.leftControl.frame.maxX
+//                let duration = self.getEndDuration(real: true) - self.getStartDuration(real: true)
+//                self.setLineAnimation(x: mixX, duration: TimeInterval(duration))
+//            }
         }
     }
     func stopLineAnimation() {
@@ -361,16 +361,16 @@ extension VideoEditorCropView {
             preferredTimescale: avAsset.duration.timescale
         )
     }
-    func stopScroll() {
+    func stopScroll(_ offset: CGPoint?) {
         let inset = collectionView.contentInset
-        var offset = collectionView.contentOffset
+        var currentOffset = offset ?? collectionView.contentOffset
         let maxOffsetX = contentWidth - (collectionView.width - inset.left)
-        if offset.x < -inset.left {
-            offset.x = -inset.left
-        }else if offset.x > maxOffsetX {
-            offset.x = maxOffsetX
+        if currentOffset.x < -inset.left {
+            currentOffset.x = -inset.left
+        }else if currentOffset.x > maxOffsetX {
+            currentOffset.x = maxOffsetX
         }
-        collectionView.setContentOffset(offset, animated: false)
+        collectionView.setContentOffset(currentOffset, animated: false)
     }
 }
 extension VideoEditorCropView: UICollectionViewDataSource,
@@ -444,7 +444,7 @@ extension VideoEditorCropView: UICollectionViewDataSource,
         if videoFrameCount < 0 {
             return
         }
-        imageGenerator = AVAssetImageGenerator.init(asset: avAsset)
+        imageGenerator = AVAssetImageGenerator(asset: avAsset)
         imageGenerator?.maximumSize = CGSize(width: itemWidth * 2, height: itemHeight * 2)
         imageGenerator?.appliesPreferredTrackTransform = true
         imageGenerator?.requestedTimeToleranceAfter = .zero
